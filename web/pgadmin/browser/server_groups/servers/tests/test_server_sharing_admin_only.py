@@ -61,6 +61,7 @@ def _server_row(app, sid):
         row = Server.query.filter_by(id=sid).first()
         return dict(shared=bool(row.shared),
                     shared_username=row.shared_username,
+                    from_pgadmin=bool(row.shared_username_from_pgadmin),
                     comment=row.comment)
 
 
@@ -97,6 +98,17 @@ class NonAdminServerSharingTestCase(BaseTestGenerator):
               update={'shared_username': 'someone', 'comment': 'edited'},
               expected_update=200, expected_shared=False,
               expected_shared_username=None, expected_comment='edited')),
+        ('Non-admin use pgAdmin username is ignored on create',
+         dict(create={'shared': False,
+                      'shared_username_from_pgadmin': True},
+              expected_create=200, expected_shared=False,
+              expected_from_pgadmin=False)),
+        ('Non-admin use pgAdmin username is ignored on update',
+         dict(create={}, expected_create=200,
+              update={'shared_username_from_pgadmin': True,
+                      'comment': 'edited'},
+              expected_update=200, expected_shared=False,
+              expected_from_pgadmin=False, expected_comment='edited')),
     ]
 
     update = None
@@ -104,6 +116,7 @@ class NonAdminServerSharingTestCase(BaseTestGenerator):
     expected_shared = None
     expected_shared_username = 'unchecked'
     expected_comment = None
+    expected_from_pgadmin = None
 
     def setUp(self):
         self.server_id = None
@@ -117,6 +130,7 @@ class NonAdminServerSharingTestCase(BaseTestGenerator):
         server = dict(self.server)
         server.pop('shared', None)
         server.pop('shared_username', None)
+        server.pop('shared_username_from_pgadmin', None)
         server.update(self.create)
 
         servers_before = _server_count(self.app)
@@ -150,6 +164,9 @@ class NonAdminServerSharingTestCase(BaseTestGenerator):
             if self.expected_shared_username != 'unchecked':
                 self.assertEqual(row['shared_username'],
                                  self.expected_shared_username)
+            if self.expected_from_pgadmin is not None:
+                self.assertEqual(row['from_pgadmin'],
+                                 self.expected_from_pgadmin)
             if self.expected_comment is not None:
                 self.assertEqual(row['comment'], self.expected_comment)
         finally:
@@ -162,7 +179,11 @@ class AdminServerSharingTestCase(BaseTestGenerator):
 
     scenarios = [
         ('Admin can create a shared server', dict()),
+        ('Admin can create a shared server that uses the pgAdmin username',
+         dict(from_pgadmin=True)),
     ]
+
+    from_pgadmin = False
 
     def setUp(self):
         self.server_id = None
@@ -171,7 +192,8 @@ class AdminServerSharingTestCase(BaseTestGenerator):
         restore_server_fixture_on_cleanup(self)
 
     def runTest(self):
-        server = dict(self.server, shared=True, shared_username='someone')
+        server = dict(self.server, shared=True, shared_username='someone',
+                      shared_username_from_pgadmin=self.from_pgadmin)
         response = self.tester.post(
             '/browser/server/obj/{0}/'.format(utils.SERVER_GROUP),
             data=json.dumps(server),
@@ -184,6 +206,7 @@ class AdminServerSharingTestCase(BaseTestGenerator):
         row = _server_row(self.app, self.server_id)
         self.assertTrue(row['shared'])
         self.assertEqual(row['shared_username'], 'someone')
+        self.assertEqual(row['from_pgadmin'], self.from_pgadmin)
 
     def tearDown(self):
         if self.server_id is not None:

@@ -103,7 +103,16 @@ def prepare_sharing_data(data, server=None):
     if data.get('shared') and not (server is not None and server.shared):
         return data, gettext('Only an administrator can share a server.')
     data.pop('shared_username', None)
+    data.pop('shared_username_from_pgadmin', None)
     return data, None
+
+
+def reset_shared_usernames(server):
+    """Put every non-owner's copy of a shared server back on the server's
+    shared username, once it no longer uses the pgAdmin username. The
+    caller commits."""
+    for copy in SharedServer.query.filter_by(osid=server.id):
+        copy.username = server.shared_username or ''
 
 
 def _named_connection_params(params):
@@ -616,7 +625,8 @@ class ServerModule(sg.ServerGroupPluginModule):
                 host=data.host,
                 port=data.port,
                 maintenance_db=data.maintenance_db,
-                username=data.shared_username,
+                username=shared_server_username(
+                    data, data.shared_username, current_user),
                 save_password=0,
                 comment=None,
                 role=data.role,
@@ -1051,6 +1061,7 @@ class ServerNode(PGChildNodeView):
             'tunnel_keep_alive': 'tunnel_keep_alive',
             'shared': 'shared',
             'shared_username': 'shared_username',
+            'shared_username_from_pgadmin': 'shared_username_from_pgadmin',
             'kerberos_conn': 'kerberos_conn',
             'connection_params': 'connection_params',
             'prepare_threshold': 'prepare_threshold',
@@ -1122,6 +1133,9 @@ class ServerNode(PGChildNodeView):
         # remove the shared username if shared is updated to False
         if 'shared' in data and data['shared'] is False:
             data['shared_username'] = ''
+            data['shared_username_from_pgadmin'] = False
+
+        used_pgadmin_username = bool(server.shared_username_from_pgadmin)
 
         manager = get_driver(PG_DEFAULT_DRIVER).connection_manager(sid)
         conn = manager.connection()
@@ -1144,6 +1158,10 @@ class ServerNode(PGChildNodeView):
         # tags is JSON type, sqlalchemy sometimes will not detect change
         if 'tags' in data:
             flag_modified(sharedserver or server, 'tags')
+
+        if used_pgadmin_username and server.shared and \
+                not server.shared_username_from_pgadmin:
+            reset_shared_usernames(server)
 
         try:
             db.session.commit()
@@ -1213,6 +1231,7 @@ class ServerNode(PGChildNodeView):
         _owner_only_fields = frozenset({
             'passexec_cmd',
             'db_res', 'db_res_type',
+            'shared_username_from_pgadmin',
         })
 
         for arg in config_param_map:
@@ -1369,7 +1388,9 @@ class ServerNode(PGChildNodeView):
             'password': server.password,
             'save_password': server.save_password,
             'shared': server.shared if config.SERVER_MODE else None,
-            'shared_username': server.shared_username
+            'shared_username': server.shared_username,
+            'shared_username_from_pgadmin':
+                bool(server.shared_username_from_pgadmin)
             if config.SERVER_MODE else None,
             'username': server.username,
             'gid': str(server.servergroup_id),
@@ -1560,6 +1581,9 @@ class ServerNode(PGChildNodeView):
                 tunnel_keep_alive=data.get('tunnel_keep_alive', 0),
                 shared=data.get('shared', None),
                 shared_username=data.get('shared_username', None),
+                shared_username_from_pgadmin=bool(
+                    data.get('shared') and
+                    data.get('shared_username_from_pgadmin', False)),
                 passexec_cmd=data.get('passexec_cmd', None),
                 passexec_name=data.get('passexec_name', None),
                 passexec_expiration=data.get('passexec_expiration', None),
