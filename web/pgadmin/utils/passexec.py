@@ -349,10 +349,12 @@ def resolve_server_passexec(server, user):
     the Server row's passexec fields, which get_shared_server_properties
     deliberately leaves alone."""
     from pgadmin.model import SharedServer
+    from pgadmin.browser.server_groups.servers import         shared_server_username
     if server.shared and server.user_id != user.id:
         ss = SharedServer.query.filter_by(osid=server.id,
                                           user_id=user.id).first()
-        db_user = ss.username if ss else server.shared_username
+        db_user = shared_server_username(
+            server, ss.username if ss else server.shared_username, user)
         own = ss.passexec_name if ss else None
         if own == '':
             return None

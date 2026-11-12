@@ -23,7 +23,8 @@ def _server(**kw):
     s = MagicMock(id=7, user_id=1, shared=True, host='db.example.com',
                   port=5432, username='owner_db', shared_username='shr',
                   maintenance_db='postgres', passexec_name='vault',
-                  passexec_expiration=60, passexec_cmd=None)
+                  passexec_expiration=60, passexec_cmd=None,
+                  shared_username_from_pgadmin=False)
     for k, v in kw.items():
         setattr(s, k, v)
     return s
@@ -68,6 +69,22 @@ class TestResolveServerPassexec(BaseTestGenerator):
          dict(srv=dict(passexec_name=None), user=OTHER,
               row=dict(passexec_name=None, username='jane_db'),
               expected=None)),
+        ('Non-owner uses the pgAdmin username when the owner chose it',
+         dict(srv=dict(shared_username_from_pgadmin=True), user=OTHER,
+              row=dict(passexec_name=None, username='stale_choice'),
+              expected=('vault', 60, 'jane.doe@example.com'))),
+        ('Non-owner without a row uses the pgAdmin username too',
+         dict(srv=dict(shared_username_from_pgadmin=True), user=OTHER,
+              row=None,
+              expected=('vault', 60, 'jane.doe@example.com'))),
+        ('Non-owner with their own command still uses the pgAdmin username',
+         dict(srv=dict(shared_username_from_pgadmin=True), user=OTHER,
+              row=dict(passexec_name='other', passexec_expiration=5,
+                       username='jane_db'),
+              expected=('other', 5, 'jane.doe@example.com'))),
+        ('Owner keeps the server username when the setting is on',
+         dict(srv=dict(shared_username_from_pgadmin=True), user=OWNER,
+              row=None, expected=('vault', 60, 'owner_db'))),
     ]
 
     def runTest(self):
