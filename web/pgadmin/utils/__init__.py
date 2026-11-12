@@ -1099,6 +1099,8 @@ def dump_database_servers(output_file, selected_servers,
             add_value(attr_dict, "Comment", server.comment)
             add_value(attr_dict, "Shared", server.shared)
             add_value(attr_dict, "SharedUsername", server.shared_username)
+            add_value(attr_dict, "UsePgAdminUsername",
+                      server.shared_username_from_pgadmin or None)
             add_value(attr_dict, "DBRestriction", server.db_res)
             add_value(attr_dict, "DBRestrictionType", server.db_res_type)
             add_value(attr_dict, "BGColor", server.bgcolor)
@@ -1215,6 +1217,7 @@ def validate_json_data(data, is_admin):
 
         # Only the JSON value true means shared, anything else is not.
         is_shared = obj.get("Shared") is True
+        use_pgadmin_username = obj.get("UsePgAdminUsername") is True
 
         def check_attrib(attrib):
             if attrib not in obj:
@@ -1232,6 +1235,11 @@ def validate_json_data(data, is_admin):
             if errmsg:
                 return errmsg
 
+        if use_pgadmin_username and not is_shared:
+            return gettext(
+                "'UsePgAdminUsername' requires 'Shared' to be true for "
+                "server '%s'" % server)
+
         is_service_attrib_available = obj.get("Service", None) is not None
 
         if not is_service_attrib_available:
@@ -1242,7 +1250,11 @@ def validate_json_data(data, is_admin):
             if errmsg:
                 return errmsg
 
-            if is_shared:
+            if is_shared and use_pgadmin_username:
+                # Each non-owner connects as their pgAdmin username, so
+                # no username is needed.
+                pass
+            elif is_shared:
                 # Shared servers may carry either the owner's username
                 # or a per-user override, so accept either attribute.
                 # Check the values rather than merely the keys: the
@@ -1469,6 +1481,11 @@ def load_database_servers(input_file, selected_servers,
             shared_username = obj.get("SharedUsername", None)
             if is_shared and username is None:
                 username = shared_username
+            if is_shared and obj.get("UsePgAdminUsername") is True                     and not username:
+                # The server table requires a username. The owner's own
+                # connection is the only one that uses it, so default to
+                # the pgAdmin username of the user who imports the file.
+                username = user.username
 
             # Create the server
             new_server = Server()
@@ -1553,6 +1570,8 @@ def load_database_servers(input_file, selected_servers,
 
             new_server.shared_username = \
                 shared_username if new_server.shared else None
+
+            new_server.shared_username_from_pgadmin =                 new_server.shared and obj.get("UsePgAdminUsername") is True
 
             new_server.kerberos_conn = obj.get("KerberosAuthentication", None)
 

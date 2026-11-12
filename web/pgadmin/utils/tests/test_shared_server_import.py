@@ -293,3 +293,74 @@ class TestReplaceWithValidFile(_SharedImportMixin, BaseTestGenerator):
 
         self.assertTrue(ok)
         self.assertEqual([s.name for s in self._servers()], ['imported'])
+
+
+class TestAdminImportsUsePgAdminUsername(
+        _SharedImportMixin, BaseTestGenerator):
+    """UsePgAdminUsername sets the flag on a shared server, needs no
+    username, and survives an export followed by an import."""
+
+    is_admin = True
+
+    def _dump(self):
+        from pgadmin.utils import dump_database_servers
+        with redirect_stdout(io.StringIO()):
+            ok, _ = dump_database_servers(
+                self.path, None, self.user, from_setup=True)
+        self.assertTrue(ok)
+        with open(self.path) as f:
+            servers = json.load(f)['Servers']
+        return {s['Name']: s for s in servers.values()
+                if s['Group'] == GROUP}
+
+    def runTest(self):
+        self._write({
+            '1': self._entry(Name='per user', Shared=True,
+                             UsePgAdminUsername=True, Username=None),
+            '2': self._entry(Name='one for all', Shared=True,
+                             SharedUsername='postgres'),
+        })
+        (ok, _), _ = self._load(['1', '2'])
+
+        self.assertTrue(ok)
+        servers = {s.name: s for s in self._servers()}
+        self.assertTrue(servers['per user'].shared)
+        self.assertTrue(servers['per user'].shared_username_from_pgadmin)
+        self.assertIsNone(servers['per user'].shared_username)
+        # The server table requires a username: the importer's is used.
+        self.assertEqual(servers['per user'].username, self.user.username)
+        self.assertFalse(servers['one for all'].shared_username_from_pgadmin)
+
+        dumped = self._dump()
+        self.assertIs(dumped['per user']['UsePgAdminUsername'], True)
+        self.assertNotIn('UsePgAdminUsername', dumped['one for all'])
+
+        # Import what was exported.
+        with open(self.path) as f:
+            exported = {k: v for k, v in json.load(f)['Servers'].items()
+                        if v['Group'] == GROUP}
+        self._cleanup()
+        self._write(exported)
+        (ok, _), _ = self._load(list(exported))
+        self.assertTrue(ok)
+        servers = {s.name: s for s in self._servers()}
+        self.assertTrue(servers['per user'].shared_username_from_pgadmin)
+        self.assertFalse(servers['one for all'].shared_username_from_pgadmin)
+
+
+class TestUsePgAdminUsernameNeedsShared(
+        _SharedImportMixin, BaseTestGenerator):
+    """UsePgAdminUsername on a server that is not shared is an import
+    error, and nothing is imported."""
+
+    is_admin = True
+
+    def runTest(self):
+        self._write({
+            '1': self._entry(Name='private', UsePgAdminUsername=True),
+        })
+        (ok, msg), _ = self._load(['1'])
+
+        self.assertFalse(ok)
+        self.assertIn("'UsePgAdminUsername' requires 'Shared'", msg)
+        self.assertEqual(self._servers(), [])

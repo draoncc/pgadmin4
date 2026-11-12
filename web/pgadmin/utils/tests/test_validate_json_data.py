@@ -109,6 +109,45 @@ class TestValidateJsonData(BaseTestGenerator):
              expected_error=None,
              expected_servers=["1"]
          )),
+        ('A shared server using the pgAdmin username needs no username',
+         dict(
+             servers={"1": server(Shared=True, UsePgAdminUsername=True)},
+             is_admin=True,
+             expected_error=None,
+             expected_servers=["1"]
+         )),
+        ('UsePgAdminUsername is rejected on a server that is not shared',
+         dict(
+             servers={"1": server(Username="postgres",
+                                  UsePgAdminUsername=True)},
+             is_admin=True,
+             expected_error="'UsePgAdminUsername' requires 'Shared'",
+             expected_servers=["1"]
+         )),
+        ('UsePgAdminUsername is rejected when Shared is false',
+         dict(
+             servers={"1": server(Shared=False, Username="postgres",
+                                  UsePgAdminUsername=True)},
+             is_admin=True,
+             expected_error="'UsePgAdminUsername' requires 'Shared'",
+             expected_servers=["1"]
+         )),
+        ('UsePgAdminUsername false on a server that is not shared is fine',
+         dict(
+             servers={"1": server(Username="postgres",
+                                  UsePgAdminUsername=False)},
+             is_admin=True,
+             expected_error=None,
+             expected_servers=["1"]
+         )),
+        ('A shared server without UsePgAdminUsername still needs a username',
+         dict(
+             servers={"1": server(Shared=True, UsePgAdminUsername=False)},
+             is_admin=True,
+             expected_error="'Username' or 'SharedUsername' attribute not "
+                            "found",
+             expected_servers=["1"]
+         )),
         ('A server using a service does not require any username',
          dict(
              servers={"1": {"Group": "Servers", "Name": "Test server",
