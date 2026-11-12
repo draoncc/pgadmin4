@@ -34,7 +34,7 @@ import config
 #
 ##########################################################################
 
-SCHEMA_VERSION = 53
+SCHEMA_VERSION = 54
 
 ##########################################################################
 #
@@ -350,6 +350,8 @@ class Server(db.Model, UserScopedMixin):
     tunnel_keep_alive = db.Column(db.Integer(), nullable=True, default=0)
     shared = db.Column(db.Boolean(), nullable=False)
     shared_username = db.Column(db.String(64), nullable=True)
+    shared_username_from_pgadmin = db.Column(
+        db.Boolean(), nullable=False, default=False, server_default='0')
     kerberos_conn = db.Column(db.Boolean(), nullable=False, default=0)
     cloud_status = db.Column(db.Integer(), nullable=False, default=0)
     connection_params = db.Column(MutableDict.as_mutable(types.JSON))

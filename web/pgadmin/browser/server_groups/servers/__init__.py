@@ -75,6 +75,17 @@ def _is_non_owner(server):
     return server.shared and server.user_id != current_user.id
 
 
+def shared_server_username(server, stored_username, user):
+    """Return the database username a non-owner connects with.
+
+    When the owner turned on shared_username_from_pgadmin it is the
+    pgAdmin username of the given user, whatever the non-owner's own copy
+    stores; otherwise it is the stored username."""
+    if server.shared_username_from_pgadmin:
+        return user.username
+    return stored_username
+
+
 def prepare_sharing_data(data, server=None):
     """Refuse a create or update payload sent to the servers API that would
     share a server unless it comes from an administrator, matching the
@@ -360,7 +371,8 @@ class ServerModule(sg.ServerGroupPluginModule):
         server.connection_params = s_conn
 
         server.servergroup_id = sharedserver.servergroup_id
-        server.username = sharedserver.username
+        server.username = shared_server_username(
+            server, sharedserver.username, current_user)
         server.server_owner = sharedserver.server_owner
         server.password = sharedserver.password
         server.prepare_threshold = sharedserver.prepare_threshold

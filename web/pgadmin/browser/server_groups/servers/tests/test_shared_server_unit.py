@@ -51,7 +51,7 @@ def _make_server(**overrides):
         discovery_id=None, db_res=None, db_res_type=None,
         kerberos_conn=False, cloud_status=0,
         shared_username='shared_user', tags=None,
-        is_adhoc=0,
+        is_adhoc=0, shared_username_from_pgadmin=False,
     )
     defaults.update(overrides)
     server = MagicMock()
@@ -128,6 +128,10 @@ class TestGetSharedServerProperties(BaseTestGenerator):
          dict(test_method='test_none_conn_params')),
         ('Merge returns server unchanged when sharedserver is None',
          dict(test_method='test_null_guard')),
+        ('Merge uses the pgAdmin username when the owner turned it on',
+         dict(test_method='test_pgadmin_username_overrides_stored')),
+        ('Merge keeps the stored username when the setting is off',
+         dict(test_method='test_stored_username_when_setting_off')),
     ]
 
     @patch('pgadmin.browser.server_groups.servers.'
@@ -144,6 +148,21 @@ class TestGetSharedServerProperties(BaseTestGenerator):
             ss = _make_shared_server()
         return ServerModule.get_shared_server_properties(
             server, ss)
+
+    def test_pgadmin_username_overrides_stored(self):
+        server = _make_server(shared_username_from_pgadmin=True)
+        ss = _make_shared_server(username='stale_choice')
+        with patch(SRV_MODULE + '.current_user',
+                   MagicMock(username='alice@example.com')):
+            result = self._merge(server=server, ss=ss)
+        self.assertEqual(result.username, 'alice@example.com')
+
+    def test_stored_username_when_setting_off(self):
+        ss = _make_shared_server(username='jane_db')
+        with patch(SRV_MODULE + '.current_user',
+                   MagicMock(username='alice@example.com')):
+            result = self._merge(ss=ss)
+        self.assertEqual(result.username, 'jane_db')
 
     def test_overlays_passexec(self):
         # The overlay must not copy the SharedServer's passexec fields;
