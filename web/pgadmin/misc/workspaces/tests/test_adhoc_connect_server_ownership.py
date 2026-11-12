@@ -62,6 +62,7 @@ class AdhocConnectServerOwnershipTestCase(BaseTestGenerator):
 
         # Create a shared server as the admin user.
         self.server['shared'] = True
+        self.server['shared_username_from_pgadmin'] = True
         url = "/browser/server/obj/{0}/".format(utils.SERVER_GROUP)
         response = self.tester.post(
             url, data=json.dumps(self.server), content_type='html/json')
@@ -79,7 +80,8 @@ class AdhocConnectServerOwnershipTestCase(BaseTestGenerator):
         from pgadmin.model import Server
         with self.app.app_context():
             return [
-                dict(id=s.id, user_id=s.user_id, shared=bool(s.shared))
+                dict(id=s.id, user_id=s.user_id, shared=bool(s.shared),
+                     from_pgadmin=bool(s.shared_username_from_pgadmin))
                 for s in Server.query.filter_by(is_adhoc=1).all()
             ]
 
@@ -129,6 +131,10 @@ class AdhocConnectServerOwnershipTestCase(BaseTestGenerator):
                 row['shared'],
                 'Adhoc server row {0} must not be shared.'.format(
                     row['id']))
+            self.assertFalse(
+                row['from_pgadmin'],
+                'Adhoc server row {0} must not use the pgAdmin '
+                'username.'.format(row['id']))
 
     def tearDown(self):
         # Remove any adhoc rows left behind, then the shared server.

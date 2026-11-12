@@ -210,6 +210,7 @@ def adhoc_connect_server():
                 server.user_id = current_user.id
                 server.shared = False
                 server.shared_username = None
+                server.shared_username_from_pgadmin = False
                 # The clone also inherits the source server's stored
                 # credentials; drop them so a non-owner can't persist
                 # another user's secret material under their own row.
