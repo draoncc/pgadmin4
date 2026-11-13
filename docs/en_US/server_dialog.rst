@@ -70,6 +70,29 @@ Use the fields in the *General* tab to identify the server:
 * Use the *Shared Username* field to fill the username of the shared server
   connection. By default, it will take the username of the server being shared.
 
+* Use the *Use pgAdmin username* checkbox to make every user other than the
+  owner connect to the shared server as the username they logged in to pgAdmin
+  with, instead of the shared username. This option appears only in server
+  mode, and only when *Shared?* is set to *Yes*. It applies whichever
+  authentication source the user logs in with, and is used exactly as it is,
+  with no changes: the database role must exist under that name. A pgAdmin
+  username can be an email address, such as ``alice@example.com``, in which
+  case the role name must be quoted when it is created in PostgreSQL. See
+  :ref:`OAuth2 <oauth2>`, :ref:`LDAP <enabling_ldap_authentication>`, :ref:`Kerberos <kerberos>` and
+  :ref:`Webserver <webserver>` authentication for the pgAdmin username each
+  source provides.
+
+  While the checkbox is selected, the *Shared Username* field is disabled but
+  keeps its value, and the users who are not the owner cannot change their
+  *Username*: it is read-only and shows their pgAdmin username. The owner
+  continues to connect with the *Username* on the *Connection* tab. The
+  setting takes effect at the next connection, including for users who
+  opened the server before it was selected, and replaces any username they had
+  entered for themselves. The pgAdmin username is also the username given to a
+  password exec command (see ``PGADMIN_PASSEXEC_USERNAME`` below), shown in the
+  password prompt and in the server's properties. If the checkbox is cleared,
+  every other user goes back to the current *Shared Username*.
+
 * Provide a comment about the server in the *Comments* field.
 
 Click the *Connection* tab to continue.

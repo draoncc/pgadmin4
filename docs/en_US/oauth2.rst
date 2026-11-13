@@ -339,6 +339,13 @@ With this configuration:
 - pgAdmin enforces PKCE (challenge method + response type)
 - The token exchange is performed without a client secret
 
+The username resolved from the claim is the pgAdmin username of the user. On a
+shared server that has *Use pgAdmin username* selected (see
+:ref:`server_dialog`), it is also the database username of every user other
+than the owner, so a role with exactly that name must exist. It can be an email
+address, in which case the role name must be quoted when it is created in
+PostgreSQL.
+
 Username Resolution for OIDC
 -----------------------------
 

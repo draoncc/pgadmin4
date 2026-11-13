@@ -91,6 +91,16 @@ and modify the values for the following parameters:
     See :ref:`Accounts from different authentication sources
     <auth_source_accounts>` for more information.
 
+Using the webserver username as the database username
+=====================================================
+
+The pgAdmin username of a user who logs in through Webserver authentication is
+the name the web server supplies, in the variable or header set by
+*WEBSERVER_REMOTE_USER*. On a shared server that has *Use pgAdmin username*
+selected (see :ref:`server_dialog`), it is also the database username of every
+user other than the owner. A role with exactly that name must exist in the
+database.
+
 Master Password
 ===============
 

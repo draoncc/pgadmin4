@@ -136,6 +136,15 @@ credentials is the responsibility of:
 See :ref:`Avoiding a bruteforce attack <avoiding_bruteforce>` for the equivalent note
 on the login page.
 
+Using the LDAP username as the database username
+************************************************
+
+The pgAdmin username of an LDAP user is the username they enter on the login
+page, that is the value of the attribute named by *LDAP_USERNAME_ATTRIBUTE*.
+On a shared server that has *Use pgAdmin username* selected (see
+:ref:`server_dialog`), it is also the database username of every user other
+than the owner. A role with exactly that name must exist in the database.
+
 Internal accounts
 *****************
 

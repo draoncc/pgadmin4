@@ -65,6 +65,7 @@ New features
   | `Issue #9066 <https://github.com/pgadmin-org/pgadmin4/issues/9066>`_ -  Add the PostgreSQL 18 pg_restore options to the Restore dialog.
   | `Issue #9212 <https://github.com/pgadmin-org/pgadmin4/issues/9212>`_ -  Show fill factor, TOAST tuple target and parallel workers in the table Properties panel.
   | `Issue #9264 <https://github.com/pgadmin-org/pgadmin4/issues/9264>`_ -  Move the 'Returns a set?' option to the Definition tab in the Function dialog.
+  | `Issue #9540 <https://github.com/pgadmin-org/pgadmin4/issues/9540>`_ -  Add a *Use pgAdmin username* option to shared servers, so that every user other than the owner connects as their own pgAdmin username, and a ``UsePgAdminUsername`` key to the servers.json format.
   | `Issue #9704 <https://github.com/pgadmin-org/pgadmin4/issues/9704>`_ -  Allow an OAuth2 claim to restrict which shared servers a user can see, configured through ``OAUTH2_SERVER_GROUP_CLAIM`` and ``OAUTH2_SERVER_GROUP_CLAIM_MAPPING``.
   | `Issue #9975 <https://github.com/pgadmin-org/pgadmin4/issues/9975>`_ -  Allow the login page to be skipped when OAuth2 is the only authentication source, using ``OAUTH2_AUTO_LOGIN`` and ``OAUTH2_LOGOUT_URL``.
   | `Issue #10148 <https://github.com/pgadmin-org/pgadmin4/issues/10148>`_ -  Add support for managing pg_timetable chains and tasks.

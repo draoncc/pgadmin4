@@ -186,6 +186,12 @@ PostgreSQL Server settings to configure Kerberos Authentication
 Accounts
 ========
 
+The pgAdmin username of a Kerberos user is their principal, for example
+*user@EXAMPLE.COM*. On a shared server that has *Use pgAdmin username*
+selected (see :ref:`server_dialog`), it is also the database username of
+every user other than the owner, so a role with exactly that name must exist,
+quoted when it is created because of the ``@``.
+
 A Kerberos user is only ever logged in to the Kerberos account whose username
 is their principal (for example *user@EXAMPLE.COM*), never to an ``INTERNAL``
 or other account with the same username. If there is no such Kerberos account

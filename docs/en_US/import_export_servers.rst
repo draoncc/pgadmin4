@@ -134,7 +134,13 @@ attributes. The following attributes are required to be present in every server
 definition: Name, Group, Port, Username, SSLMode, MaintenanceDB and one of Host,
 HostAddr or Service. A shared server may supply SharedUsername in place of
 Username, in which case the shared username is also used as the username of the
-imported server.
+imported server. A shared server that sets ``UsePgAdminUsername`` to ``true``
+needs neither: each user other than the owner connects as their own pgAdmin
+username (see the *Use pgAdmin username* option in :ref:`server_dialog`). The
+owner's own connection uses ``Username``; when it is not given, the username of
+the pgAdmin user who imports the file is used. Setting ``UsePgAdminUsername`` to
+``true`` on a server that is not shared is an error. The key is written when
+servers are exported, if it is ``true``.
 
 Password fields cannot be imported or exported.
 
@@ -203,6 +209,15 @@ The following example shows both a minimally defined and a fully defined server:
                     }
                 ],
                 "PostConnectionSQL": "set timezone='America/New_York'"
+            },
+            "3": {
+                "Name": "Shared Server, One Role Per User",
+                "Group": "Server Group 2",
+                "Host": "host.domain.com",
+                "Port": 5432,
+                "MaintenanceDB": "postgres",
+                "Shared": true,
+                "UsePgAdminUsername": true
             }
         }
     }
