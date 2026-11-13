@@ -48,14 +48,8 @@ from pgadmin.utils.master_password import get_crypt_key
 from io import StringIO
 from pgadmin.utils.locker import ConnectionLocker
 from pgadmin.utils.driver import get_driver
-from pgadmin.utils.auth_method import AUTH_METHOD_OAUTH_DIRECT, \
-    AUTH_METHOD_OAUTH_EXCHANGE
-from pgadmin.utils.pg_oauth2 import (
-    install_oauth_hook,
-    get_postgres_oauth_token,
-    oauth_token_context,
-    OAuthTokenError,
-)
+from pgadmin.utils.pg_oauth2 import OAuthTokenError
+from pgadmin.utils.token_auth import token_connection
 
 
 # On Windows, Psycopg is not compatible with the default ProactorEventLoop.
@@ -290,13 +284,6 @@ def _is_transaction_control(query):
         match.group().lower() in TRANSACTION_CONTROL_KEYWORDS
 
 
-# The pg_oauth2 token mode of each token method.
-_OAUTH_TOKEN_MODES = {
-    AUTH_METHOD_OAUTH_DIRECT: "direct",
-    AUTH_METHOD_OAUTH_EXCHANGE: "exchange",
-}
-
-
 class Connection(BaseConnection):
     """
     class Connection(object)
@@ -504,32 +491,18 @@ class Connection(BaseConnection):
                     ).format(str(e)), password
         return False, '', password
 
-    def _oauth_context(self):
+    def _token_connection(self, password):
         """
-        Prepare OAuth credentials and scope them to a connection attempt.
+        Scope the credentials of one physical connection.
 
-        A server that does not use a token method temporarily clears any
-        inherited OAuth token.
+        Asks the token authentication registry for the token provider and
+        token delivery of the server's authentication method. Use it
+        around building the connection string and opening the connection;
+        it yields the password to use.
         """
-        connection_params = self.manager.connection_params or {}
-        mode = _OAUTH_TOKEN_MODES.get(self.manager.auth_method)
-
-        token = None
-
-        if mode is not None:
-            try:
-                install_oauth_hook()
-            except RuntimeError as exc:
-                raise OAuthTokenError(str(exc)) from None
-
-            token = get_postgres_oauth_token(
-                mode,
-                connection_params.get("oauth_client_id"),
-                connection_params.get("oauth_scope"),
-                connection_params.get("oauth_issuer"),
-            )
-
-        return oauth_token_context(token)
+        return token_connection(
+            self.manager.auth_method, self.manager.connection_params,
+            password)
 
     def connect(self, **kwargs):
         if self.conn:
@@ -623,12 +596,12 @@ class Connection(BaseConnection):
                     os.chmod(ssl_key, 0o600)
 
             with ConnectionLocker(manager.kerberos_conn):
-                # Create the connection string
-                connection_string = manager.create_connection_string(
-                    database, user, password)
-
                 try:
-                    with self._oauth_context():
+                    with self._token_connection(password) as conn_password:
+                        # Create the connection string
+                        connection_string = manager.create_connection_string(
+                            database, user, conn_password)
+
                         if self.async_:
                             autocommit = True
                             if 'auto_commit' in kwargs:
@@ -655,8 +628,7 @@ class Connection(BaseConnection):
                 except OAuthTokenError as exc:
                     manager.stop_ssh_tunnel()
                     current_app.logger.warning(
-                        "PostgreSQL OAuth authentication "
-                        "failed for server %s: %s",
+                        "Token authentication failed for server %s: %s",
                         manager.sid,
                         exc,
                     )
@@ -1845,11 +1817,11 @@ WHERE db.datname = current_database()""")
 
         try:
             with ConnectionLocker(manager.kerberos_conn):
-                # Create the connection string
-                connection_string = manager.create_connection_string(
-                    self.db, manager.user, password)
+                with self._token_connection(password) as conn_password:
+                    # Create the connection string
+                    connection_string = manager.create_connection_string(
+                        self.db, manager.user, conn_password)
 
-                with self._oauth_context():
                     pg_conn = psycopg.connect(
                         connection_string,
                         cursor_factory=DictCursor,
@@ -1858,7 +1830,7 @@ WHERE db.datname = current_database()""")
             return False, str(e)
         except OAuthTokenError as exc:
             current_app.logger.warning(
-                "PostgreSQL OAuth authentication failed "
+                "Token authentication failed "
                 "while resetting the connection for server %s: %s",
                 manager.sid,
                 exc,
@@ -2091,10 +2063,11 @@ Failed to reset the connection to the server due to following error:
 
             try:
                 with ConnectionLocker(self.manager.kerberos_conn):
-                    connection_string = self.manager.create_connection_string(
-                        self.db, self.manager.user, password)
+                    with self._token_connection(password) as conn_password:
+                        connection_string = \
+                            self.manager.create_connection_string(
+                                self.db, self.manager.user, conn_password)
 
-                    with self._oauth_context():
                         pg_conn = psycopg.connect(
                             connection_string,
                             cursor_factory=DictCursor,
