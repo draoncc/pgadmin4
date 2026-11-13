@@ -1481,7 +1481,8 @@ def load_database_servers(input_file, selected_servers,
             shared_username = obj.get("SharedUsername", None)
             if is_shared and username is None:
                 username = shared_username
-            if is_shared and obj.get("UsePgAdminUsername") is True                     and not username:
+            if is_shared and obj.get("UsePgAdminUsername") is True \
+                    and not username:
                 # The server table requires a username. The owner's own
                 # connection is the only one that uses it, so default to
                 # the pgAdmin username of the user who imports the file.
@@ -1571,7 +1572,8 @@ def load_database_servers(input_file, selected_servers,
             new_server.shared_username = \
                 shared_username if new_server.shared else None
 
-            new_server.shared_username_from_pgadmin =                 new_server.shared and obj.get("UsePgAdminUsername") is True
+            new_server.shared_username_from_pgadmin = \
+                new_server.shared and obj.get("UsePgAdminUsername") is True
 
             new_server.kerberos_conn = obj.get("KerberosAuthentication", None)
 
