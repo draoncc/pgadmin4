@@ -64,6 +64,7 @@ export function sharingForServerCopy(d, user) {
   if (d?.shared && !user?.is_admin) {
     d.shared = false;
     d.shared_username = null;
+    d.shared_username_from_pgadmin = false;
   }
   return d;
 }
@@ -341,11 +342,28 @@ export default class ServerSchema extends BaseUISchema {
         },
       },
       {
+        id: 'shared_username_from_pgadmin', label: gettext('Use pgAdmin username'),
+        type: 'checkbox', mode: ['properties', 'create', 'edit'], deps: ['shared'],
+        helpMessage: gettext('Every other user connects as the username they logged in to pgAdmin with, in place of the shared username.'),
+        readonly: function(state){
+          return !obj.isNew(state) && obj.userId != current_user.id;
+        }, visible: (state)=>{
+          return pgAdmin.server_mode == 'True' && Boolean(state.shared);
+        },
+        depChange: (state, source)=>{
+          if(source == 'shared' && !state.shared && state.shared_username_from_pgadmin) {
+            return {shared_username_from_pgadmin: false};
+          }
+        },
+      },
+      {
         id: 'shared_username', label: gettext('Shared Username'), type: 'text',
         controlProps: { maxLength: 64},
         mode: ['properties', 'create', 'edit'], deps: ['shared', 'username'],
         readonly: (s) => {
           return !(!this.origData.shared && s.shared);
+        }, disabled: (s) => {
+          return Boolean(s.shared_username_from_pgadmin);
         }, visible: ()=>{
           return current_user.is_admin && pgAdmin.server_mode == 'True';
         },
@@ -412,6 +430,8 @@ export default class ServerSchema extends BaseUISchema {
       },{
         id: 'username', label: gettext('Username'), type: 'text', group: gettext('Connection'),
         mode: ['properties', 'edit', 'create'],
+        // A non-owner connects as their pgAdmin username, which is shown here.
+        readonly: (state)=>obj.isShared(state) && Boolean(state.shared_username_from_pgadmin),
         depChange: (state)=>{
           if(obj.origData.username != state.username && !obj.isNew(state) && state.connected){
             obj.informText = gettext(

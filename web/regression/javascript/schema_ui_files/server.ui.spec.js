@@ -238,12 +238,82 @@ describe('ServerSchema', ()=>{
     });
   });
 
+  describe('use pgAdmin username', ()=>{
+    let origMode, origUserId, origIsAdmin;
+    const field = (schema, id) => _.find(schema.fields, (f)=>f.id==id);
+
+    beforeEach(()=>{
+      origMode = pgAdmin.server_mode;
+      origUserId = current_user.id;
+      origIsAdmin = current_user.is_admin;
+      pgAdmin.server_mode = 'True';
+      current_user.is_admin = true;
+    });
+
+    afterEach(()=>{
+      pgAdmin.server_mode = origMode;
+      current_user.id = origUserId;
+      current_user.is_admin = origIsAdmin;
+    });
+
+    it('is a checkbox that is visible only for a shared server in server mode', ()=>{
+      let f = field(createSchemaObject(), 'shared_username_from_pgadmin');
+      expect(f.type).toBe('checkbox');
+      expect(f.label).toBe('Use pgAdmin username');
+      expect(f.visible({shared: true})).toBe(true);
+      expect(f.visible({shared: false})).toBe(false);
+      expect(f.visible({})).toBe(false);
+
+      pgAdmin.server_mode = 'False';
+      expect(f.visible({shared: true})).toBe(false);
+    });
+
+    it('is read-only for a non-owner', ()=>{
+      let schema = createSchemaObject();
+      let f = field(schema, 'shared_username_from_pgadmin');
+      schema.userId = 1;
+      current_user.id = 1;
+      expect(f.readonly({id: 5, shared: true})).toBe(false);
+      current_user.id = 2;
+      expect(f.readonly({id: 5, shared: true})).toBe(true);
+    });
+
+    it('disables Shared Username while it is on, and keeps its value', ()=>{
+      let f = field(createSchemaObject(), 'shared_username');
+      expect(f.disabled({shared: true, shared_username: 'shr', shared_username_from_pgadmin: true})).toBe(true);
+      expect(f.disabled({shared: true, shared_username: 'shr', shared_username_from_pgadmin: false})).toBe(false);
+      let change = f.depChange({shared: true, shared_username: 'shr', shared_username_from_pgadmin: true, username: 'me'},
+        'shared_username_from_pgadmin', null, {oldState: {}});
+      expect(change?.shared_username).toBeUndefined();
+    });
+
+    it('is cleared when Shared is turned off', ()=>{
+      let f = field(createSchemaObject(), 'shared_username_from_pgadmin');
+      expect(f.depChange({shared: false, shared_username_from_pgadmin: true}, 'shared'))
+        .toEqual({shared_username_from_pgadmin: false});
+      expect(f.depChange({shared: true, shared_username_from_pgadmin: true}, 'shared'))
+        .toBeUndefined();
+    });
+
+    it('makes the username read-only for a non-owner while it is on', ()=>{
+      let schema = createSchemaObject();
+      let f = field(schema, 'username');
+      schema.userId = 1;
+      current_user.id = 2;
+      expect(f.readonly({id: 5, shared: true, shared_username_from_pgadmin: true})).toBe(true);
+      expect(f.readonly({id: 5, shared: true, shared_username_from_pgadmin: false})).toBe(false);
+      current_user.id = 1;
+      expect(f.readonly({id: 5, shared: true, shared_username_from_pgadmin: true})).toBe(false);
+    });
+  });
+
   describe('sharingForServerCopy', ()=>{
     it('clears the sharing of a copy made by a non-admin', ()=>{
-      let d = {name: 'x', shared: true, shared_username: 'someone'};
+      let d = {name: 'x', shared: true, shared_username: 'someone', shared_username_from_pgadmin: true};
       expect(sharingForServerCopy(d, {is_admin: false})).toBe(d);
       expect(d.shared).toBe(false);
       expect(d.shared_username).toBeNull();
+      expect(d.shared_username_from_pgadmin).toBe(false);
 
       d = {shared: true, shared_username: 'someone'};
       sharingForServerCopy(d, undefined);

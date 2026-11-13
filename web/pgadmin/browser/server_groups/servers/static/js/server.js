@@ -64,6 +64,7 @@ define('pgadmin.node.server', [
           d.shared = false;
           d.server_owner = null;
           d.shared_username = null;
+          d.shared_username_from_pgadmin = false;
           passexecForServerCopy(d);
         }
         // Only an administrator can share a server, so the copy made by
