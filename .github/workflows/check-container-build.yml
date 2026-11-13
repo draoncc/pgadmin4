@@ -19,11 +19,6 @@ on:
         type: string
         required: false
         default: ''
-    secrets:
-      DOCKERHUB_USERNAME:
-        required: false
-      DOCKERHUB_TOKEN:
-        required: false
 
   push:
     branches: [ "master" ]
@@ -59,7 +54,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Build for both architectures and push to the registries
+        description: Build for both architectures and push to GHCR
         type: boolean
         required: false
         default: false
@@ -107,10 +102,10 @@ jobs:
           push: false
           context: .
 
-  # The publish. Declared on the publishing environment, which is where the
-  # Docker Hub credentials live: an environment secret is not available to a
-  # job that does not name the environment, which is what secrets: inherit
-  # alone does not solve.
+  # The publish. Pushes only to GHCR, under this repository's own owner and
+  # name, so a fork publishes to its own package rather than upstream's.
+  # Still declared on the publishing environment, so that any protection
+  # rules on it keep gating the push.
   publish-container:
     if: inputs.publish
     runs-on: ubuntu-22.04
@@ -124,7 +119,7 @@ jobs:
 
     steps:
       # Before anything is logged in to, because this value becomes a tag in
-      # a job holding the Docker Hub credentials, and the tags input is
+      # a job holding a token that can write packages, and the tags input is
       # newline separated: an unchecked value could name a second tag, and a
       # tag can name another repository. The shape is the one the wrapper
       # requires of a build location.
@@ -148,11 +143,14 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # GHCR rejects upper case in an image name, and an owner or repository
+      # name may have it, so the name is lowered here rather than taken
+      # straight from github.repository.
+      - name: Name the image
+        id: image
+        run: |
+          set -euo pipefail
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
@@ -170,6 +168,4 @@ jobs:
           push: true
           context: .
           platforms: linux/amd64,linux/arm64
-          tags: |
-            dpage/pgadmin4:${{ inputs.location }}
-            ghcr.io/pgadmin-org/pgadmin4:${{ inputs.location }}
+          tags: ${{ steps.image.outputs.name }}:${{ inputs.location }}
