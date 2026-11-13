@@ -348,14 +348,14 @@ def resolve_server_passexec(server, user):
     anything else is their own choice). The owner's values are read from
     the Server row's passexec fields, which get_shared_server_properties
     deliberately leaves alone."""
+    # Imported here, like the other model imports in this module, so that
+    # importing it does not need the configuration database set up.
     from pgadmin.model import SharedServer
-    from pgadmin.browser.server_groups.servers import \
-        shared_server_username
     if server.shared and server.user_id != user.id:
         ss = SharedServer.query.filter_by(osid=server.id,
                                           user_id=user.id).first()
-        db_user = shared_server_username(
-            server, ss.username if ss else server.shared_username, user)
+        db_user = server.non_owner_db_username(
+            user, ss.username if ss else server.shared_username)
         own = ss.passexec_name if ss else None
         if own == '':
             return None

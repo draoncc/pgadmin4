@@ -15,6 +15,7 @@ or HTTP infrastructure.
 """
 
 from unittest.mock import MagicMock, patch, call
+from pgadmin.model import Server
 from pgadmin.utils.route import BaseTestGenerator
 
 SRV_MODULE = 'pgadmin.browser.server_groups.servers'
@@ -57,6 +58,9 @@ def _make_server(**overrides):
     server = MagicMock()
     for k, v in defaults.items():
         setattr(server, k, v)
+    # Use the real method so the overlay logic is exercised, not mocked.
+    server.non_owner_db_username = lambda user, stored: \
+        Server.non_owner_db_username(server, user, stored)
     return server
 
 
@@ -150,6 +154,8 @@ class TestGetSharedServerProperties(BaseTestGenerator):
             server, ss)
 
     def test_pgadmin_username_overrides_stored(self):
+        """With the setting on, the merged username is the current user's
+        pgAdmin username, not the one stored on their copy."""
         server = _make_server(shared_username_from_pgadmin=True)
         ss = _make_shared_server(username='stale_choice')
         with patch(SRV_MODULE + '.current_user',
@@ -158,6 +164,8 @@ class TestGetSharedServerProperties(BaseTestGenerator):
         self.assertEqual(result.username, 'alice@example.com')
 
     def test_stored_username_when_setting_off(self):
+        """With the setting off, the merged username is the one stored on
+        the user's copy."""
         ss = _make_shared_server(username='jane_db')
         with patch(SRV_MODULE + '.current_user',
                    MagicMock(username='alice@example.com')):

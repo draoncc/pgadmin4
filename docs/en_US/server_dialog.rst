@@ -71,7 +71,7 @@ Use the fields in the *General* tab to identify the server:
   connection. By default, it will take the username of the server being shared.
 
 * Use the *Use pgAdmin username* checkbox to make every user other than the
-  owner connect to the shared server as the username they logged in to pgAdmin
+  owner connect to the shared server as the username you logged in to pgAdmin
   with, instead of the shared username. This option appears only in server
   mode, and only when *Shared?* is set to *Yes*. It applies whichever
   authentication source the user logs in with, and is used exactly as it is,
@@ -88,10 +88,12 @@ Use the fields in the *General* tab to identify the server:
   continues to connect with the *Username* on the *Connection* tab. The
   setting takes effect at the next connection, including for users who
   opened the server before it was selected, and replaces any username they had
-  entered for themselves. The pgAdmin username is also the username given to a
-  password exec command (see ``PGADMIN_PASSEXEC_USERNAME`` below), shown in the
-  password prompt and in the server's properties. If the checkbox is cleared,
-  every other user goes back to the current *Shared Username*.
+  entered for themselves. The pgAdmin username is also shown in the password
+  prompt and in the server's properties. In server mode, ``%USERNAME%`` is not
+  substituted in a password exec command; the command receives the pgAdmin
+  username in the ``PGADMIN_PASSEXEC_USERNAME`` environment variable (see
+  below). If the checkbox is cleared, every other user goes back to the
+  current *Shared Username*.
 
 * Provide a comment about the server in the *Comments* field.
 
@@ -318,8 +320,9 @@ Use the fields in the *Advanced* tab to configure a connection:
   following variables describing the connection, which take precedence over
   any variable of the same name:
   ``PGADMIN_PASSEXEC_HOST``, ``PGADMIN_PASSEXEC_PORT``,
-  ``PGADMIN_PASSEXEC_USERNAME`` (the username that connection uses, so a
-  non-owner's own username on a shared server), ``PGADMIN_PASSEXEC_DATABASE``
+  ``PGADMIN_PASSEXEC_USERNAME`` (the username that connection uses: on a
+  shared server, a non-owner's own username, or their pgAdmin username if the
+  owner selected *Use pgAdmin username*), ``PGADMIN_PASSEXEC_DATABASE``
   (the maintenance database), ``PGADMIN_PASSEXEC_PGADMIN_USER`` (the pgAdmin
   user making the connection) and ``PGADMIN_PASSEXEC_AUTH_SOURCE`` (how that
   user authenticated to pgAdmin). The following variables describe the server
@@ -382,9 +385,14 @@ Use the fields in the *Advanced* tab to configure a connection:
     the command is run. ``PGADMIN_PASSEXEC_HOST``, ``PGADMIN_PASSEXEC_PORT``,
     ``PGADMIN_PASSEXEC_USERNAME`` and ``PGADMIN_PASSEXEC_DATABASE`` are set by
     whoever edits the server definition; on a shared server, a user who does
-    not own the server sets their own username. Commands should therefore
-    decide whether to issue a password based on the pgAdmin identity, and
-    treat the other four variables as untrusted input.
+    not own the server sets their own username, unless the owner selected
+    *Use pgAdmin username*, in which case ``PGADMIN_PASSEXEC_USERNAME`` is
+    that user's pgAdmin username and they cannot change it. Commands should
+    therefore decide whether to issue a password based on the pgAdmin
+    identity, and treat the other four variables as untrusted input, except
+    that ``PGADMIN_PASSEXEC_USERNAME`` is as trustworthy as
+    ``PGADMIN_PASSEXEC_PGADMIN_USER`` for a non-owner of a server that has
+    *Use pgAdmin username* selected.
 
     The ``PGADMIN_PASSEXEC_SHARED``, ``PGADMIN_PASSEXEC_SERVER_ID``,
     ``PGADMIN_PASSEXEC_SERVER_OWNER``,
@@ -398,7 +406,8 @@ Use the fields in the *Advanced* tab to configure a connection:
     ``PGADMIN_PASSEXEC_HOST``, ``PGADMIN_PASSEXEC_PORT`` and
     ``PGADMIN_PASSEXEC_DATABASE`` are taken from the owner's server, not from
     the copy kept for each user, whilst ``PGADMIN_PASSEXEC_USERNAME`` is each
-    user's own. Every user owns their own server groups and may give them any
+    user's own: their pgAdmin username if the owner selected *Use pgAdmin
+    username*, otherwise a name they choose. Every user owns their own server groups and may give them any
     name, including the name of an administrator's group, so the server group
     proves nothing on its own: check ``PGADMIN_PASSEXEC_SHARED`` and the owner
     as well. Commands should decide whether to issue a password based on the

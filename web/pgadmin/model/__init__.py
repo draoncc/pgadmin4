@@ -364,6 +364,17 @@ class Server(db.Model, UserScopedMixin):
     )
     post_connection_sql = db.Column(db.String(), nullable=True)
 
+    def non_owner_db_username(self, user, stored_username):
+        """Return the database username a user who does not own this shared
+        server connects with.
+
+        When the owner turned on shared_username_from_pgadmin it is the
+        pgAdmin username of the given user, whatever the non-owner's own
+        copy stores; otherwise it is the stored username."""
+        if self.shared_username_from_pgadmin:
+            return user.username
+        return stored_username
+
     def clone(self):
         d = dict(self.__dict__)
         d.pop("id")  # get rid of id

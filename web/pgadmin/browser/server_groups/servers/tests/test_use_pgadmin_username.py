@@ -10,8 +10,14 @@
 """The 'Use pgAdmin username' setting of a shared server: which requests
 may set it, and what turning it off does to the non-owners."""
 
+import inspect
+import json
+import unittest
 import uuid
 from unittest.mock import MagicMock, patch
+
+from flask import Flask
+from flask_babel import Babel
 
 from pgadmin.model import db, Server, ServerGroup, SharedServer, User
 from pgadmin.utils.constants import LDAP, OAUTH2
@@ -92,12 +98,14 @@ class TestTurningTheFlagOff(BaseTestGenerator):
             db.session.commit()
 
     def _add(self, obj):
+        """Save a row and remember it, so tearDown can delete it."""
         db.session.add(obj)
         db.session.commit()
         self.created.append(obj)
         return obj
 
     def _copy_username(self):
+        """Return the username stored on the non-owner's copy."""
         return SharedServer.query.filter_by(
             osid=self.server_id, user_id=self.other_id).one().username
 
@@ -110,3 +118,66 @@ class TestTurningTheFlagOff(BaseTestGenerator):
             reset_shared_usernames(server)
             db.session.commit()
             self.assertEqual(self._copy_username(), 'shr')
+
+
+class TestUpdateTurnsTheFlagOff(BaseTestGenerator):
+    """Updating a shared server through ServerNode.update resets the
+    non-owners' copies to the Shared Username only when the update turns
+    the flag off."""
+
+    scenarios = [
+        ('Clearing the flag resets the copies',
+         dict(payload={'shared_username_from_pgadmin': False},
+              expect_reset=True)),
+        ('Leaving the flag on keeps the copies',
+         dict(payload={'comment': 'edited'}, expect_reset=False)),
+    ]
+
+    def setUp(self):
+        # Pure logic test with mocks: skip the server setup.
+        unittest.TestCase.setUp(self)
+
+    def runTest(self):
+        from pgadmin.browser.server_groups.servers import ServerNode
+        server = Server(
+            id=7, user_id=1, servergroup_id=1, name='shared',
+            host='db.example.com', port=5432, maintenance_db='postgres',
+            username='owner_db', save_password=0, shared=True,
+            shared_username='shr', shared_username_from_pgadmin=True)
+        copies = [MagicMock(username='alice@example.com'),
+                  MagicMock(username='bob@example.com')]
+        shared_cls = MagicMock()
+        shared_cls.query.filter_by.return_value = copies
+
+        manager = MagicMock()
+        manager.connection.return_value.connected.return_value = False
+        driver = MagicMock()
+        driver.connection_manager.return_value = manager
+        owner = MagicMock(id=1)
+        owner.has_role.return_value = True
+
+        node = ServerNode.__new__(ServerNode)
+        node.blueprint = MagicMock()
+        node.blueprint.generate_browser_node.return_value = {}
+        app = Flask(__name__)
+        Babel(app)
+        with app.test_request_context(
+                method='PUT', data=json.dumps(self.payload),
+                content_type='application/json'), \
+                patch(SRV_MODULE + '.get_server', return_value=server), \
+                patch(SRV_MODULE + '.current_user', owner), \
+                patch(SRV_MODULE + '.config.SERVER_MODE', True), \
+                patch(SRV_MODULE + '.get_driver', return_value=driver), \
+                patch(SRV_MODULE + '.get_crypt_key',
+                      return_value=(True, 'key')), \
+                patch(SRV_MODULE + '.SharedServer', shared_cls), \
+                patch(SRV_MODULE + '.db'), \
+                patch(SRV_MODULE + '.server_icon_and_background'):
+            # Skip the login and MFA decorators: this tests the update.
+            inspect.unwrap(ServerNode.update)(node, 1, 7)
+
+        expected = ['shr', 'shr'] if self.expect_reset else \
+            ['alice@example.com', 'bob@example.com']
+        self.assertEqual([c.username for c in copies], expected)
+        self.assertEqual(server.shared_username_from_pgadmin,
+                         not self.expect_reset)

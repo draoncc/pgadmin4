@@ -344,7 +344,7 @@ export default class ServerSchema extends BaseUISchema {
       {
         id: 'shared_username_from_pgadmin', label: gettext('Use pgAdmin username'),
         type: 'checkbox', mode: ['properties', 'create', 'edit'], deps: ['shared'],
-        helpMessage: gettext('Every other user connects as the username they logged in to pgAdmin with, in place of the shared username.'),
+        helpMessage: gettext('Every other user connects as their pgAdmin username, in place of the shared username.'),
         readonly: function(state){
           return !obj.isNew(state) && obj.userId != current_user.id;
         }, visible: (state)=>{

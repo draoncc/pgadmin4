@@ -11,6 +11,7 @@
 
 from unittest.mock import patch, MagicMock
 
+from pgadmin.model import Server
 from pgadmin.utils.route import BaseTestGenerator
 from pgadmin.utils.passexec import (
     resolve_server_passexec, build_passexec, PasswordExec,
@@ -27,6 +28,9 @@ def _server(**kw):
                   shared_username_from_pgadmin=False)
     for k, v in kw.items():
         setattr(s, k, v)
+    # Use the real method so the username rule is exercised, not mocked.
+    s.non_owner_db_username = lambda user, stored: \
+        Server.non_owner_db_username(s, user, stored)
     return s
 
 
