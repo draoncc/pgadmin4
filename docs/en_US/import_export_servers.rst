@@ -163,7 +163,8 @@ connect.
 in server mode, the database username is taken from each user's own OAuth2
 login when they connect (see :ref:`oauth2_username_from_login`). It needs a
 token method, and a file that sets it to ``true`` for a server whose
-``AuthMethod`` is ``password`` or missing is refused. A Username or
+``AuthMethod`` is ``password`` or missing is refused, as is one loaded in
+desktop mode, since the setting requires server mode. A Username or
 SharedUsername that the server sets as well wins over it, for example to
 connect as an Entra group role. Exports write ``UsernameFromLogin`` only when it
 is on, and leave out an empty Username or SharedUsername, so the file loads

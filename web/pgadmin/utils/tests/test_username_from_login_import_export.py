@@ -14,6 +14,9 @@ with the password method, and an export loads back in unchanged."""
 import io
 import json
 from contextlib import redirect_stdout
+from unittest.mock import patch
+
+import config
 
 from pgadmin.utils.route import BaseTestGenerator
 from pgadmin.utils.tests.test_passexec_import_export import \
@@ -99,7 +102,11 @@ class TestUsernameFromLoginImportRefused(_UsernameFromLoginMixin,
         ('Off and without a username', dict(
             bad={'AuthMethod': 'oauth_direct', 'UsernameFromLogin': False},
             expect='Username')),
+        ('Outside server mode', dict(
+            bad={'AuthMethod': 'oauth_direct', 'UsernameFromLogin': True},
+            server_mode=False, expect='server mode')),
     ]
+    server_mode = True
 
     def runTest(self):
         from pgadmin.model import Server, ServerGroup
@@ -112,7 +119,8 @@ class TestUsernameFromLoginImportRefused(_UsernameFromLoginMixin,
 
         # The setup.py path prints the error and exits.
         out = io.StringIO()
-        with redirect_stdout(out), self.assertRaises(SystemExit):
+        with redirect_stdout(out), self.assertRaises(SystemExit), \
+                patch.object(config, 'SERVER_MODE', self.server_mode):
             load_database_servers(
                 self.path, None, self.user, from_setup=True)
 

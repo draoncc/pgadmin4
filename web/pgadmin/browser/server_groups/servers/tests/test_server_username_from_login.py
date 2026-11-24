@@ -12,6 +12,7 @@ owner and a non-owner can store, and what they see."""
 
 import json
 import unittest
+from unittest.mock import patch
 
 import config
 from pgadmin.utils.route import BaseTestGenerator
@@ -234,3 +235,57 @@ class NonOwnerFollowsSharedUsernameTestCase(NonOwnerApiMixin,
         self.assertEqual(self.properties()['username'], self.expected)
         self.owner_update(shared_username='renamed-user')
         self.assertEqual(self.properties()['username'], self.expected_after)
+
+
+class DesktopUsernameFromLoginTestCase(BaseTestGenerator):
+    """Outside server mode, "Username from login" is refused: it needs a
+    server-mode OAuth2 login."""
+
+    scenarios = [
+        ('Refused on create', dict(
+            create={'auth_method': 'oauth_direct',
+                    'username_from_login': True},
+            update=None)),
+        ('Refused on update', dict(
+            create={'auth_method': 'oauth_direct'},
+            update={'username_from_login': True})),
+    ]
+
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+        self.server_id = None
+        self.url = '/browser/server/obj/{0}/'.format(utils.SERVER_GROUP)
+
+    def _refused(self, response):
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('server mode', json.loads(response.data)['errormsg'])
+
+    def runTest(self):
+        payload = dict({
+            'name': 'username-from-login-desktop',
+            'host': 'database.example.test',
+            'port': 5432,
+            'db': 'postgres',
+            'username': 'database-user',
+            'role': None,
+            'connect_now': False,
+            'connection_params': [],
+        }, **self.create)
+        with patch.object(config, 'SERVER_MODE', False):
+            response = self.tester.post(
+                self.url, data=json.dumps(payload),
+                content_type='html/json')
+            if self.update is None:
+                self._refused(response)
+                return
+            self.assertEqual(response.status_code, 200, response.data)
+            self.server_id = json.loads(
+                response.data.decode('utf-8'))['node']['_id']
+            self._refused(self.tester.put(
+                self.url + str(self.server_id),
+                data=json.dumps(dict(self.update, id=self.server_id)),
+                content_type='html/json'))
+
+    def tearDown(self):
+        if self.server_id is not None:
+            utils.delete_server_with_api(self.tester, self.server_id)

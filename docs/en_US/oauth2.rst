@@ -797,7 +797,8 @@ A username that is set explicitly always wins over *Username from login*, so
 a server can still connect as an Entra group role or another role chosen on
 purpose. The setting cannot be used with the *Password* method, and the
 server dialog, the servers API and a servers.json import refuse the
-combination. The switch is only offered in server mode.
+combination. The setting requires server mode: the switch is only offered
+there, and the servers API and a servers.json import refuse it in desktop mode.
 
 The setting applies to the owner's own connection as well. A non-owner of a
 shared server follows the owner's setting, and while they do the owner's

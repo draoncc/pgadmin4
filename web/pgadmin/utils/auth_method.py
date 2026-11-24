@@ -117,7 +117,10 @@ def uses_username_from_login(auth_method, username_from_login):
 def check_username_from_login(auth_method, username_from_login):
     """Return an error message when "Username from login" is stored
     together with a method that has no login token to take the username
-    from, else None. A missing method means password."""
+    from, or outside server mode, where there is no OAuth2 login, else
+    None. A missing method means password."""
+    if username_from_login and not config.SERVER_MODE:
+        return gettext('Username from login requires server mode.')
     if username_from_login and not is_token_auth_method(auth_method):
         return gettext(
             'Username from login needs a token authentication method; it '
