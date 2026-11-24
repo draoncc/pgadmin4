@@ -89,6 +89,16 @@ def followed_auth_method(server, sharedserver=None):
     return server.auth_method
 
 
+def followed_username_from_login(server, sharedserver=None):
+    """The "Username from login" setting for the current user, whatever
+    the method: a non-owner follows the owner's value until they choose
+    their own, which then sticks."""
+    if sharedserver is not None and \
+            sharedserver.username_from_login is not None:
+        return bool(sharedserver.username_from_login)
+    return bool(server.username_from_login)
+
+
 def prepare_sharing_data(data, server=None):
     """Refuse a create or update payload sent to the servers API that would
     share a server unless it comes from an administrator, matching the
@@ -383,19 +393,18 @@ class ServerModule(sg.ServerGroupPluginModule):
         server.prepare_threshold = sharedserver.prepare_threshold
         server.kerberos_conn = sharedserver.kerberos_conn
         server.auth_method = followed_auth_method(server, sharedserver)
-        # Likewise for "Username from login". While the non-owner follows
-        # it, the owner's shared username is the username set explicitly,
-        # and it wins. The setting only applies to a token method, so it is
-        # ignored when a non-owner who follows it chooses password.
-        if sharedserver.username_from_login is None:
-            username_from_login = bool(server.username_from_login)
-            server.username = sharedserver.username or \
-                server.shared_username
-        else:
-            username_from_login = sharedserver.username_from_login
+        # A username of the non-owner's own wins. Without one, the owner's
+        # current shared username is the username set explicitly, unless
+        # the non-owner turned "Username from login" on themselves. The
+        # setting only applies to a token method, so it is ignored when a
+        # non-owner who follows it chooses password.
+        if sharedserver.username or sharedserver.username_from_login is True:
             server.username = sharedserver.username
+        else:
+            server.username = server.shared_username
         server.username_from_login = uses_username_from_login(
-            server.auth_method, username_from_login)
+            server.auth_method,
+            followed_username_from_login(server, sharedserver))
         # A SharedServer row created before tags were copied across has
         # NULL tags, which is not the same thing as a user who has
         # cleared every tag they had: the latter leaves an empty list.
@@ -634,11 +643,10 @@ class ServerModule(sg.ServerGroupPluginModule):
                 host=data.host,
                 port=data.port,
                 maintenance_db=data.maintenance_db,
-                # While the non-owner follows the owner's "Username from
-                # login", they store no username of their own.
-                username=None
-                if getattr(data, 'username_from_login', None) is True
-                else data.shared_username,
+                # While the non-owner follows the owner, they store no
+                # username of their own: the owner's current shared
+                # username is used.
+                username=None,
                 save_password=0,
                 comment=None,
                 role=data.role,

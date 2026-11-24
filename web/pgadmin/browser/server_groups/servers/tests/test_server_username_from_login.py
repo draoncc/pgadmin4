@@ -190,14 +190,12 @@ class NonOwnerUsernameFromLoginTestCase(NonOwnerApiMixin, BaseTestGenerator):
 
 
 class NewNonOwnerUsernameTestCase(BaseTestGenerator):
-    """While a non-owner follows the owner's "Username from login", their
-    shared server stores no username of its own."""
+    """While a non-owner follows the owner, their new shared server stores
+    no username of its own: the owner's current shared username is used."""
 
     scenarios = [
-        ('Owner with Username from login', dict(
-            owner_value=True, stored_username=None)),
-        ('Owner without Username from login', dict(
-            owner_value=None, stored_username='database-user')),
+        ('Owner with Username from login', dict(owner_value=True)),
+        ('Owner without Username from login', dict(owner_value=None)),
     ]
 
     def setUp(self):
@@ -207,4 +205,32 @@ class NewNonOwnerUsernameTestCase(BaseTestGenerator):
         owner = owner_server('entra', username_from_login=self.owner_value)
         shared = create_shared_server(self, owner)
         self.assertIsNone(shared.username_from_login)
-        self.assertEqual(shared.username, self.stored_username)
+        self.assertIsNone(shared.username)
+
+
+class NonOwnerFollowsSharedUsernameTestCase(NonOwnerApiMixin,
+                                            BaseTestGenerator):
+    """A non-owner with no username of their own connects as the owner's
+    current shared username."""
+
+    scenarios = [
+        ('Follows the owner changing the shared username', dict(
+            owner_server={}, update=None,
+            expected='shared-user', expected_after='renamed-user')),
+        ('Keeps a username of their own', dict(
+            owner_server={}, update={'username': 'own-user'},
+            expected='own-user', expected_after='own-user')),
+        ('Turned off with no username of their own', dict(
+            owner_server={'auth_method': 'oauth_direct',
+                          'username_from_login': True},
+            update={'username_from_login': False},
+            expected='shared-user', expected_after='renamed-user')),
+    ]
+
+    def runTest(self):
+        if self.update is not None:
+            response = self.put(self.update)
+            self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(self.properties()['username'], self.expected)
+        self.owner_update(shared_username='renamed-user')
+        self.assertEqual(self.properties()['username'], self.expected_after)

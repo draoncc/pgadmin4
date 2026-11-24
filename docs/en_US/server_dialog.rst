@@ -69,6 +69,8 @@ Use the fields in the *General* tab to identify the server:
 
 * Use the *Shared Username* field to fill the username of the shared server
   connection. By default, it will take the username of the server being shared.
+  A non-owner who has not entered a username of their own connects as the
+  current *Shared Username*, so a change to it reaches them.
   It is disabled, and cleared, while *Username from login* is on, so that each
   user connects with the username of their own login.
 
