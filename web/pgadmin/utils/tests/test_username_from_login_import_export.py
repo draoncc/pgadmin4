@@ -156,3 +156,74 @@ class TestUsernameFromLoginExport(_UsernameFromLoginMixin,
         self._write([exported])
         self._load_file()
         self.assertEqual(self._dump()['Azure PostgreSQL'], exported)
+
+
+class TestUsernameFromLoginRoundTrip(_UsernameFromLoginMixin,
+                                     BaseTestGenerator):
+    """Servers exported and imported again are unchanged, for the owner
+    and for a non-owner who follows the owner's method and "Username from
+    login" (both NULL on their shared server)."""
+
+    SERVERS = [
+        ENTRA_SHARED,
+        {'Name': 'shared-password', 'Host': 'db.example.com', 'Port': 5432,
+         'MaintenanceDB': 'postgres', 'Shared': True,
+         'AuthMethod': 'password', 'Username': 'owner',
+         'SharedUsername': 'shared-user'},
+        {'Name': 'shared-token', 'Host': 'db.example.com', 'Port': 5432,
+         'MaintenanceDB': 'postgres', 'Shared': True,
+         'AuthMethod': 'oauth_direct', 'Username': 'owner',
+         'SharedUsername': 'group-role', 'UsernameFromLogin': True},
+        {'Name': 'private', 'Host': 'db.example.com', 'Port': 5432,
+         'MaintenanceDB': 'postgres', 'AuthMethod': 'oauth_exchange',
+         'UsernameFromLogin': True},
+        {'Name': 'shared-owner-username', 'Host': 'db.example.com',
+         'Port': 5432, 'MaintenanceDB': 'postgres', 'Shared': True,
+         'AuthMethod': 'entra', 'Username': 'owner@example.test',
+         'UsernameFromLogin': True,
+         'ConnectionParameters': {'sslmode': 'verify-full'}},
+    ]
+
+    def _views(self):
+        """What the owner and a following non-owner connect with."""
+        from pgadmin.browser.server_groups.servers import ServerModule
+        from pgadmin.model import SharedServer
+        views = {}
+        for spec in self.SERVERS:
+            owner = self._loaded(spec['Name'])
+            view = [owner.auth_method, bool(owner.username_from_login),
+                    owner.username]
+            if owner.shared:
+                following = SharedServer(
+                    osid=owner.id, user_id=owner.user_id + 1000,
+                    auth_method=None, username_from_login=None,
+                    username=None, connection_params={})
+                merged = ServerModule.get_shared_server_properties(
+                    owner, following)
+                view += [merged.auth_method, merged.username_from_login,
+                         merged.username]
+            views[spec['Name']] = view
+        return views
+
+    def runTest(self):
+        self._write(self.SERVERS)
+        self._load_file()
+        exported = self._dump()
+        before = self._views()
+
+        self._cleanup()
+        self._write(exported.values())
+        self._load_file()
+
+        self.assertEqual(self._dump(), exported)
+        self.assertEqual(self._views(), before)
+        self.assertEqual(before['Azure PostgreSQL'],
+                         ['entra', True, None, 'entra', True, None])
+        self.assertEqual(before['shared-password'],
+                         ['password', False, 'owner',
+                          'password', False, 'shared-user'])
+        # The owner's own username is not a shared username: a non-owner
+        # still takes theirs from the login.
+        self.assertEqual(before['shared-owner-username'],
+                         ['entra', True, 'owner@example.test',
+                          'entra', True, None])
