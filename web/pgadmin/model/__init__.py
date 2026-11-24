@@ -34,7 +34,7 @@ import config
 #
 ##########################################################################
 
-SCHEMA_VERSION = 55
+SCHEMA_VERSION = 56
 
 ##########################################################################
 #
@@ -354,6 +354,9 @@ class Server(db.Model, UserScopedMixin):
     auth_method = db.Column(
         db.String(32), nullable=False, default='password',
         server_default='password')
+    # Take the database username from the pgAdmin user's OAuth2 login when
+    # connecting. True is on; False or NULL is off.
+    username_from_login = db.Column(db.Boolean(), nullable=True)
     cloud_status = db.Column(db.Integer(), nullable=False, default=0)
     connection_params = db.Column(MutableDict.as_mutable(types.JSON))
     prepare_threshold = db.Column(db.Integer(), nullable=True)
@@ -612,6 +615,9 @@ class SharedServer(db.Model, UserScopedMixin):
     # NULL follows the owner's server authentication method; a value is
     # the non-owner's own choice.
     auth_method = db.Column(db.String(32), nullable=True)
+    # NULL follows the owner's "Username from login"; True or False is the
+    # non-owner's own choice.
+    username_from_login = db.Column(db.Boolean(), nullable=True)
     tags = db.Column(types.JSON)
     post_connection_sql = db.Column(db.String(), nullable=True)
 

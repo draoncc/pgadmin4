@@ -35,7 +35,8 @@ from pgadmin.utils.passexec import normalise_passexec_name, \
 from pgadmin.utils.master_password import get_crypt_key
 from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD, \
     check_auth_method, check_entra_available, check_entra_ssl, \
-    check_kerberos_exclusive, is_token_auth_method
+    check_kerberos_exclusive, check_username_from_login, \
+    is_token_auth_method
 from pgadmin.utils.exception import CryptKeyMissing, ConnectionLost
 from pgadmin.utils.token_auth import sign_in_again_response
 from pgadmin.tools.schema_diff.node_registry import SchemaDiffRegistry
@@ -368,7 +369,6 @@ class ServerModule(sg.ServerGroupPluginModule):
         server.connection_params = s_conn
 
         server.servergroup_id = sharedserver.servergroup_id
-        server.username = sharedserver.username
         server.server_owner = sharedserver.server_owner
         server.password = sharedserver.password
         server.prepare_threshold = sharedserver.prepare_threshold
@@ -376,6 +376,19 @@ class ServerModule(sg.ServerGroupPluginModule):
         # A non-owner follows the owner's server authentication method
         # until they choose their own.
         server.auth_method = sharedserver.auth_method or server.auth_method
+        # Likewise for "Username from login". While the non-owner follows
+        # it, the owner's shared username is the username set explicitly,
+        # and it wins. The setting only applies to a token method, so it is
+        # ignored when a non-owner who follows it chooses password.
+        if sharedserver.username_from_login is None:
+            username_from_login = bool(server.username_from_login)
+            server.username = sharedserver.username or \
+                server.shared_username
+        else:
+            username_from_login = sharedserver.username_from_login
+            server.username = sharedserver.username
+        server.username_from_login = username_from_login and \
+            is_token_auth_method(server.auth_method)
         # A SharedServer row created before tags were copied across has
         # NULL tags, which is not the same thing as a user who has
         # cleared every tag they had: the latter leaves an empty list.
@@ -614,7 +627,11 @@ class ServerModule(sg.ServerGroupPluginModule):
                 host=data.host,
                 port=data.port,
                 maintenance_db=data.maintenance_db,
-                username=data.shared_username,
+                # While the non-owner follows the owner's "Username from
+                # login", they store no username of their own.
+                username=None
+                if getattr(data, 'username_from_login', None) is True
+                else data.shared_username,
                 save_password=0,
                 comment=None,
                 role=data.role,
@@ -642,6 +659,7 @@ class ServerModule(sg.ServerGroupPluginModule):
                 # administrator can share a server, so the administrator
                 # chooses the host a token method sends the token to.
                 auth_method=None,
+                username_from_login=None,
                 tags=data.tags,
                 post_connection_sql=None
             )
@@ -1055,6 +1073,7 @@ class ServerNode(PGChildNodeView):
             'shared_username': 'shared_username',
             'kerberos_conn': 'kerberos_conn',
             'auth_method': 'auth_method',
+            'username_from_login': 'username_from_login',
             'connection_params': 'connection_params',
             'prepare_threshold': 'prepare_threshold',
             'tags': 'tags',
@@ -1107,6 +1126,18 @@ class ServerNode(PGChildNodeView):
             auth_method_err = check_kerberos_exclusive(
                 data.get('auth_method', current_auth_method),
                 data.get('kerberos_conn', current.kerberos_conn))
+            if auth_method_err:
+                return bad_auth_method_response(auth_method_err)
+
+        # "Username from login" is never stored together with password,
+        # whichever of the two this update changes. A non-owner who
+        # follows the owner's value stores none, so they can choose
+        # password.
+        if 'auth_method' in data or 'username_from_login' in data:
+            auth_method_err = check_username_from_login(
+                data.get('auth_method', current_auth_method),
+                data.get('username_from_login',
+                         (sharedserver or server).username_from_login))
             if auth_method_err:
                 return bad_auth_method_response(auth_method_err)
 
@@ -1318,6 +1349,8 @@ class ServerNode(PGChildNodeView):
                            'tunnel_authentication',
                            'kerberos_conn', 'shared'):
                     value = 1 if value else 0
+                if arg == 'username_from_login' and value is not None:
+                    value = bool(value)
                 self._update_server_details(server, sharedserver,
                                             config_param_map, arg,
                                             value)
@@ -1480,6 +1513,7 @@ class ServerNode(PGChildNodeView):
             'tunnel_keep_alive': tunnel_keep_alive,
             'kerberos_conn': bool(server.kerberos_conn),
             'auth_method': server.auth_method or AUTH_METHOD_PASSWORD,
+            'username_from_login': bool(server.username_from_login),
             'gss_authenticated': manager.gss_authenticated,
             'gss_encrypted': manager.gss_encrypted,
             'cloud_status': server.cloud_status,
@@ -1546,9 +1580,11 @@ class ServerNode(PGChildNodeView):
 
         # A missing or blank method means password.
         auth_method = data.get('auth_method') or AUTH_METHOD_PASSWORD
+        username_from_login = bool(data.get('username_from_login'))
         auth_method_err = check_auth_method(auth_method) or \
             check_kerberos_exclusive(
-                auth_method, data.get('kerberos_conn', False))
+                auth_method, data.get('kerberos_conn', False)) or \
+            check_username_from_login(auth_method, username_from_login)
         if auth_method_err:
             return bad_auth_method_response(auth_method_err)
         token_auth = is_token_auth_method(auth_method)
@@ -1665,6 +1701,7 @@ class ServerNode(PGChildNodeView):
                 passexec_expiration=data.get('passexec_expiration', None),
                 kerberos_conn=1 if data.get('kerberos_conn', False) else 0,
                 auth_method=auth_method,
+                username_from_login=username_from_login,
                 connection_params=connection_params,
                 prepare_threshold=data.get('prepare_threshold', None),
                 tags=data.get('tags', None),

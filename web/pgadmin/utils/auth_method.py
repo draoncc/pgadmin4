@@ -106,3 +106,15 @@ def check_auth_method(auth_method):
     return gettext(
         'Invalid server authentication method: {0}. It must be one of: {1}.'
     ).format(auth_method, ', '.join(AUTH_METHODS))
+
+
+def check_username_from_login(auth_method, username_from_login):
+    """Return an error message when "Username from login" is stored
+    together with a method that has no login token to take the username
+    from, else None. A missing method means password."""
+    if username_from_login and not is_token_auth_method(auth_method):
+        return gettext(
+            'Username from login needs a token authentication method; it '
+            'cannot be used with the {0} authentication method.'
+        ).format(auth_method or AUTH_METHOD_PASSWORD)
+    return None
