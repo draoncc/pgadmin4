@@ -299,7 +299,7 @@ def initialize_viewdata(trans_id, cmd_type, obj_type, sgid, sid, did, obj_id):
                     status=428,
                     result={
                         "server_label": server.name,
-                        "username": user or server.username,
+                        "username": user or manager.user,
                         "errmsg": msg,
                         "prompt_password": True,
                         "allow_save_password": True
@@ -451,7 +451,11 @@ def panel(trans_id):
 
         params['server_name'] = underscore_escape(s.name)
         if 'user' not in params:
-            params['user'] = underscore_escape(s.username)
+            # The resolved username, which "Username from login" can take
+            # from the pgAdmin login.
+            manager = get_driver(PG_DEFAULT_DRIVER).connection_manager(
+                int(params['sid']))
+            params['user'] = underscore_escape(manager.user)
         if 'role' not in params and s.role:
             params['role'] = underscore_escape(s.role)
         params['llm_enabled'] = is_llm_enabled()
@@ -662,7 +666,7 @@ def _init_sqleditor(trans_id, connect, sgid, sid, did, dbname=None, **kwargs):
                         status=428,
                         result={
                             "server_label": server.name,
-                            "username": user or server.username,
+                            "username": user or manager.user,
                             "errmsg": msg,
                             "prompt_password": True,
                             "allow_save_password": True
@@ -2907,19 +2911,19 @@ def connect_server(sid):
             errormsg=gettext("Could not find the required server.")
         )
 
+    driver = get_driver(PG_DEFAULT_DRIVER)
+    manager = driver.connection_manager(sid)
+
     # When the Query Tool switches to a connection made as a different user
     # or role, connecting the server itself would prompt for the server's
     # own user's password, which that user may not know, so leave the
     # server as it is.
-    if not _connects_as_server_user(server):
+    if not _connects_as_server_user(manager):
         return make_json_response(
             success=1,
             info=gettext("Server connection not required."),
             data={}
         )
-
-    driver = get_driver(PG_DEFAULT_DRIVER)
-    manager = driver.connection_manager(sid)
 
     conn = manager.connection()
     if conn.connected():
@@ -2945,10 +2949,12 @@ def connect_server(sid):
     )
 
 
-def _connects_as_server_user(server):
+def _connects_as_server_user(manager):
     """
     Return whether the user and role supplied with the current request (if
-    any) are the ones the server itself connects with.  A request that does
+    any) are the ones the server itself connects with: the resolved username
+    and the role of its connection manager, which also reflect a non-owner's
+    shared server.  A request that does
     not supply a user is treated as connecting as the server's own user, so
     callers that do not pass one behave as they always have.
 
@@ -2964,18 +2970,10 @@ def _connects_as_server_user(server):
     if not hasattr(data, 'get') or 'user' not in data:
         return True
 
-    if server.shared and server.user_id != current_user.id:
-        # Import here to avoid circular dependency
-        from pgadmin.browser.server_groups.servers import ServerModule
-        shared_server = ServerModule.get_shared_server(
-            server, server.servergroup_id)
-        server = ServerModule.get_shared_server_properties(
-            server, shared_server)
-
     user = data.get('user') or None
     role = data.get('role') or None
-    return user == (server.username or None) and \
-        role in (None, server.role or None)
+    return user == (manager.user or None) and \
+        role in (None, manager.role or None)
 
 
 def _cache_manager_password_from_request(manager):

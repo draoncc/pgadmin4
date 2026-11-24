@@ -9,7 +9,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from pgadmin.utils.route import BaseTestGenerator
 
@@ -18,9 +18,12 @@ class TestPanelAIAvailability(BaseTestGenerator):
     """Each new Query Tool layout gets the current server-side AI status."""
 
     @patch('pgadmin.tools.sqleditor.render_template', return_value='')
+    @patch('pgadmin.tools.sqleditor.get_driver')
     @patch('pgadmin.tools.sqleditor.get_server')
     @patch('pgadmin.llm.utils.is_llm_enabled')
-    def runTest(self, enabled, get_server, render):
+    def runTest(self, enabled, get_server, get_driver, render):
+        get_driver.return_value.connection_manager.return_value = \
+            MagicMock(user='test')
         get_server.return_value = SimpleNamespace(
             shared=False, bgcolor=None, name='test', username='test', role='')
         for value in (True, False):

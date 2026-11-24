@@ -60,6 +60,8 @@ class TestConnectServerUser(BaseTestGenerator):
         # node's connect view, so the test can see whether a connect was
         # attempted without needing the server's password.
         manager = MagicMock()
+        manager.user = self.server_user or None
+        manager.role = self.server_role or None
         manager.connection.return_value.connected.return_value = False
         driver = MagicMock()
         driver.connection_manager.return_value = manager
