@@ -78,13 +78,6 @@ export function isTokenAuthMethod(authMethod) {
   return Boolean(authMethod) && authMethod !== AUTH_METHOD_PASSWORD;
 }
 
-// Whether this change turned "Username from login" on. Only in server mode,
-// where the setting is offered.
-function isUsernameFromLoginTurnedOn(state, source) {
-  return String(source) == 'username_from_login' &&
-    Boolean(state.username_from_login);
-}
-
 // Whether the database username comes from the login rather than the
 // Username field: "Username from login" is on, with a token method.
 function usesUsernameFromLogin(state) {
@@ -424,19 +417,16 @@ export default class ServerSchema extends BaseUISchema {
         id: 'shared_username', label: gettext('Shared Username'), type: 'text',
         controlProps: { maxLength: 64},
         mode: ['properties', 'create', 'edit'],
-        deps: ['shared', 'username', 'username_from_login'],
+        deps: ['shared', 'username', 'username_from_login', 'auth_method'],
         readonly: (s) => {
           return !(!this.origData.shared && s.shared);
         }, visible: ()=>{
           return current_user.is_admin && pgAdmin.server_mode == 'True';
         },
         // Non-owners take their username from their own login too.
-        disabled: (state)=>Boolean(state.username_from_login),
+        disabled: usesUsernameFromLogin,
         depChange: (state, source, _topState, actionObj)=>{
           let ret = {};
-          if(isUsernameFromLoginTurnedOn(state, source)) {
-            return {shared_username: ''};
-          }
           if(this.origData.shared) {
             return ret;
           }
@@ -497,13 +487,10 @@ export default class ServerSchema extends BaseUISchema {
         noEmpty: true,
       },{
         id: 'username', label: gettext('Username'), type: 'text', group: gettext('Connection'),
-        mode: ['properties', 'edit', 'create'], deps: ['username_from_login'],
-        disabled: (state)=>Boolean(state.username_from_login),
-        depChange: (state, source)=>{
-          // The username then comes from the login, so none is kept.
-          if(isUsernameFromLoginTurnedOn(state, source)) {
-            return {username: ''};
-          }
+        mode: ['properties', 'edit', 'create'],
+        deps: ['username_from_login', 'auth_method'],
+        disabled: usesUsernameFromLogin,
+        depChange: (state)=>{
           if(obj.origData.username != state.username && !obj.isNew(state) && state.connected){
             obj.informText = gettext(
               'To apply changes to the connection configuration, please disconnect from the server and then reconnect.'
@@ -518,7 +505,10 @@ export default class ServerSchema extends BaseUISchema {
         readonly: obj.isConnected,
         // It needs a server-mode OAuth2 login.
         visible: ()=>pgAdmin.server_mode == 'True',
-        helpMessage: gettext('Take the database username from your pgAdmin OAuth2 login when connecting, instead of the username above. It needs an OAuth or Microsoft Entra ID authentication method. On a shared server, every user connects with their own login.'),
+        helpMessage: gettext(
+          'Take the database username from your pgAdmin OAuth2 login when connecting, instead of the username above. ' +
+          'It needs an OAuth or Microsoft Entra ID authentication method. ' +
+          'On a shared server, every user connects with their own login.'),
       },{
         id: 'auth_method', label: gettext('Authentication method'), type: 'select',
         group: gettext('Connection'), mode: ['properties', 'edit', 'create'],
@@ -531,11 +521,6 @@ export default class ServerSchema extends BaseUISchema {
           // Kerberos cannot be combined with a token method.
           if (isTokenAuthMethod(state.auth_method) && state.kerberos_conn) {
             changes.kerberos_conn = false;
-          }
-          // Username from login needs a token method; with password, a
-          // username is typed in.
-          if (!isTokenAuthMethod(state.auth_method) && state.username_from_login) {
-            changes.username_from_login = false;
           }
           // The OAuth parameters only apply to the OAuth methods.
           const params = connectionParamsForAuthMethod(
@@ -807,6 +792,15 @@ export default class ServerSchema extends BaseUISchema {
     ];
   }
 
+  // Whether a non-owner follows the owner's "Username from login" rather
+  // than a value of their own: the server says it is inherited, and the
+  // switch has not been changed.
+  followsOwnerUsernameFromLogin(state) {
+    return Boolean(this.origData.username_from_login_inherited) &&
+      Boolean(state.username_from_login) ==
+        Boolean(this.origData.username_from_login);
+  }
+
   validate(state, setError) {
     let errmsg = null;
 
@@ -818,9 +812,14 @@ export default class ServerSchema extends BaseUISchema {
       setError('gid', null);
     }
 
+    // A non-owner who follows the owner's value can choose password: the
+    // setting is then ignored, and a username is asked for.
     if (pgAdmin.server_mode == 'True' && state.username_from_login &&
-        !isTokenAuthMethod(state.auth_method)) {
-      setError('username_from_login', gettext('Username from login needs a token authentication method. Choose an OAuth or Microsoft Entra ID authentication method, or turn it off.'));
+        !isTokenAuthMethod(state.auth_method) &&
+        !this.followsOwnerUsernameFromLogin(state)) {
+      setError('username_from_login', gettext(
+        'Username from login needs a token authentication method. ' +
+        'Choose an OAuth or Microsoft Entra ID authentication method, or turn it off.'));
       return true;
     }
     setError('username_from_login', null);

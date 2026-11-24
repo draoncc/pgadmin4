@@ -1460,6 +1460,15 @@ class ServerNode(PGChildNodeView):
         non_owner = bool(_is_non_owner(server))
         if non_owner:
             shared_server = ServerModule.get_shared_server(server, gid)
+        # The setting the dialog's switch shows, whatever the method, and
+        # whether it is the owner's value that a non-owner follows rather
+        # than their own choice. The dialog needs both to let a non-owner
+        # who follows a value that is on choose password.
+        username_from_login = followed_username_from_login(
+            server, shared_server)
+        username_from_login_inherited = non_owner and \
+            shared_server.username_from_login is None
+        if non_owner:
             server = ServerModule.get_shared_server_properties(server,
                                                                shared_server)
             server_owner = server.server_owner
@@ -1524,7 +1533,8 @@ class ServerNode(PGChildNodeView):
             'tunnel_keep_alive': tunnel_keep_alive,
             'kerberos_conn': bool(server.kerberos_conn),
             'auth_method': server.auth_method or AUTH_METHOD_PASSWORD,
-            'username_from_login': bool(server.username_from_login),
+            'username_from_login': username_from_login,
+            'username_from_login_inherited': username_from_login_inherited,
             'gss_authenticated': manager.gss_authenticated,
             'gss_encrypted': manager.gss_encrypted,
             'cloud_status': server.cloud_status,

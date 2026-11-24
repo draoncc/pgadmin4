@@ -71,8 +71,9 @@ Use the fields in the *General* tab to identify the server:
   connection. By default, it will take the username of the server being shared.
   A non-owner who has not entered a username of their own connects as the
   current *Shared Username*, so a change to it reaches them.
-  It is disabled, and cleared, while *Username from login* is on, so that each
-  user connects with the username of their own login.
+  It is disabled while *Username from login* is on with a token method. A
+  shared username it still holds wins over the setting, so empty it first for
+  each user to connect with the username of their own login.
 
 * Provide a comment about the server in the *Comments* field.
 
@@ -97,10 +98,12 @@ Use the fields in the *Connection* tab to configure a connection:
   authenticating with the server.
 * In server mode, set *Username from login* to take the username from your
   pgAdmin OAuth2 login each time you connect, instead of the *Username* field,
-  which is then disabled and cleared. It needs one of the token authentication
-  methods described below, and the dialog refuses to save it with *Password*;
-  choosing *Password* turns it off. On a shared server, every user connects as
-  the username of their own login. See :ref:`oauth2_username_from_login`.
+  which is then disabled. A username the field still holds is kept and wins
+  over the setting, so empty it first. The setting needs one of the token
+  authentication methods described below: choosing *Password* leaves the
+  switch as it is, and the dialog refuses to save it on with *Password*. On a
+  shared server, every user connects as the username of their own login. See
+  :ref:`oauth2_username_from_login`.
 * When *Kerberos authentication?* is set to *True*, pgAdmin will try to connect
   the PostgreSQL server using Kerberos authentication.
 * Use the *Password* field to provide a password that will be supplied when
@@ -296,7 +299,10 @@ before this behaviour was introduced keeps the *Password* method it was given
 then. With a token method, your login token is sent to the host the owner
 chose. The same applies to *Username from login*: a non-owner follows the
 owner's setting until they change it, and can turn it off to enter a username
-of their own, such as an Entra group role.
+of their own, such as an Entra group role. A non-owner who follows a *Username
+from login* that is on can still choose *Password*: the setting is then
+ignored, the dialog asks for a username, and they keep following the owner's
+setting, so it applies again if they later choose a token method.
 
 If Microsoft Entra ID or another identity provider needs you to sign in again
 (for example for multi-factor authentication, a Conditional Access policy or

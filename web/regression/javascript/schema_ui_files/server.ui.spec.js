@@ -467,31 +467,69 @@ describe('ServerSchema', ()=>{
       ['username', 'shared_username'].forEach((id)=>{
         let f = field(schema, id);
         expect(f.deps).toContain('username_from_login');
-        expect(f.disabled({username_from_login: true})).toBe(true);
-        expect(f.disabled({username_from_login: false})).toBe(false);
+        expect(f.deps).toContain('auth_method');
+        expect(f.disabled({username_from_login: true, auth_method: 'entra'}))
+          .toBe(true);
+        expect(f.disabled({username_from_login: false, auth_method: 'entra'}))
+          .toBe(false);
       });
     });
 
-    it('clears the Username and Shared Username when it is turned on', ()=>{
+    it('keeps the Username and Shared Username when it is turned on', ()=>{
       let schema = createSchemaObject();
       let state = {username: 'ada', shared_username: 'ada', shared: true,
         username_from_login: true};
       expect(field(schema, 'username').depChange(state, ['username_from_login']))
-        .toEqual({username: ''});
+        .toBeUndefined();
       expect(field(schema, 'shared_username').depChange(
         state, ['username_from_login'], {}, {oldState: state}))
-        .toEqual({shared_username: ''});
-      state.username_from_login = false;
-      expect(field(schema, 'username').depChange(state, ['username_from_login']))
+        .toEqual({});
+    });
+
+    it('stays on when the password method is selected', ()=>{
+      let depChange = field(createSchemaObject(), 'auth_method').depChange;
+      expect(depChange({auth_method: 'password', username_from_login: true}))
         .toBeUndefined();
     });
 
-    it('is turned off when the password method is selected', ()=>{
-      let depChange = field(createSchemaObject(), 'auth_method').depChange;
-      expect(depChange({auth_method: 'password', username_from_login: true}))
-        .toEqual({username_from_login: false});
-      expect(depChange({auth_method: 'entra', username_from_login: true,
-        connection_params: []})).toBeUndefined();
+    describe('followed by a non-owner', ()=>{
+      // A non-owner who has not chosen their own value follows the owner's.
+      const following = ()=>{
+        let schema = createSchemaObject();
+        schema.state = {initData: {username_from_login: true,
+          username_from_login_inherited: true}};
+        return schema;
+      };
+
+      it('is ignored when the password method is chosen', ()=>{
+        let setError = jest.fn();
+        expect(following().validate(
+          valid({auth_method: 'password', username: 'ada'}), setError))
+          .toBe(false);
+        expect(setError).toHaveBeenCalledWith('username_from_login', null);
+      });
+
+      it('asks for a username with the password method', ()=>{
+        let schema = following();
+        expect(field(schema, 'username').disabled(
+          {username_from_login: true, auth_method: 'password'})).toBe(false);
+        let setError = jest.fn();
+        expect(schema.validate(valid({auth_method: 'password'}), setError))
+          .toBe(true);
+        expect(setError).toHaveBeenCalledWith('username', 'Username must be specified.');
+      });
+
+      it('is refused with password once it is their own choice', ()=>{
+        let schema = createSchemaObject();
+        schema.state = {initData: {username_from_login: false,
+          username_from_login_inherited: true}};
+        let setError = jest.fn();
+        expect(schema.validate(
+          valid({auth_method: 'password', username: 'ada'}), setError))
+          .toBe(true);
+        expect(setError).toHaveBeenCalledWith('username_from_login',
+          expect.stringContaining('token authentication method'));
+      });
     });
 
     it('lets the username be empty with a token method', ()=>{

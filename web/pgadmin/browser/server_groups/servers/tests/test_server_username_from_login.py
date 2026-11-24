@@ -114,6 +114,7 @@ class OwnerUsernameFromLoginTestCase(BaseTestGenerator):
         self.assertEqual(response.status_code, 200, response.data)
         properties = json.loads(response.data.decode('utf-8'))
         self.assertIs(properties['username_from_login'], self.expected)
+        self.assertIs(properties['username_from_login_inherited'], False)
         self.assertEqual(properties['username'], self.expected_username)
 
     def tearDown(self):
@@ -130,20 +131,20 @@ class NonOwnerUsernameFromLoginTestCase(NonOwnerApiMixin, BaseTestGenerator):
             owner_server={'auth_method': 'oauth_exchange',
                           'username_from_login': True},
             update=None, expected=True, expected_username='shared-user',
-            owner_changes={'username_from_login': False},
+            inherited=True, owner_changes={'username_from_login': False},
             expected_after=False)),
         ('Follows the owner, with no shared username', dict(
             owner_server={'auth_method': 'oauth_direct',
                           'username_from_login': True,
                           'shared_username': ''},
             update=None, expected=True, expected_username=None,
-            owner_changes={'username_from_login': False},
+            inherited=True, owner_changes={'username_from_login': False},
             expected_after=False)),
         ('Follows the owner turning it on', dict(
             owner_server={'auth_method': 'oauth_direct',
                           'shared_username': ''},
             update=None, expected=False, expected_username=None,
-            owner_changes={'username_from_login': True},
+            inherited=True, owner_changes={'username_from_login': True},
             expected_after=True)),
         ('Turns it off with a username of their own, which sticks', dict(
             owner_server={'auth_method': 'oauth_direct',
@@ -151,27 +152,28 @@ class NonOwnerUsernameFromLoginTestCase(NonOwnerApiMixin, BaseTestGenerator):
             update={'username_from_login': False,
                     'username': 'group-role'},
             expected=False, expected_username='group-role',
-            owner_changes={'username_from_login': True},
+            inherited=False, owner_changes={'username_from_login': True},
             expected_after=False)),
         ('Turns it on with a token method the owner did not choose', dict(
             owner_server={'auth_method': 'password'},
             update={'auth_method': 'oauth_direct',
                     'username_from_login': True, 'username': ''},
             expected=True, expected_username=None,
-            owner_changes={'username_from_login': False},
+            inherited=False, owner_changes={'username_from_login': False},
             expected_after=True)),
-        ('Is ignored when they choose password', dict(
+        ('Is still followed when they choose password', dict(
             owner_server={'auth_method': 'oauth_direct',
                           'username_from_login': True},
             update={'auth_method': 'password'},
-            expected=False, expected_username='shared-user',
-            owner_changes=None, expected_after=False)),
+            expected=True, expected_username='shared-user', inherited=True,
+            owner_changes={'username_from_login': False},
+            expected_after=False)),
         ('Is refused when they turn it on with password', dict(
             owner_server={'auth_method': 'oauth_direct'},
             update={'auth_method': 'password',
                     'username_from_login': True},
             expected_status=400,
-            expected=False, expected_username='shared-user',
+            expected=False, expected_username='shared-user', inherited=True,
             owner_changes=None, expected_after=False)),
     ]
     expected_status = 200
@@ -183,11 +185,45 @@ class NonOwnerUsernameFromLoginTestCase(NonOwnerApiMixin, BaseTestGenerator):
                              response.data)
         properties = self.properties()
         self.assertIs(properties['username_from_login'], self.expected)
+        self.assertIs(properties['username_from_login_inherited'],
+                      self.inherited)
         self.assertEqual(properties['username'], self.expected_username)
         if self.owner_changes:
             self.owner_update(**self.owner_changes)
         self.assertIs(self.properties()['username_from_login'],
                       self.expected_after)
+
+
+class NonOwnerPasswordWhileFollowingTestCase(NonOwnerApiMixin,
+                                             BaseTestGenerator):
+    """A non-owner who follows a "Username from login" that is on and
+    chooses password connects with a username of their own, and keeps
+    following the setting: when they switch back to a token method, it
+    is the owner's again."""
+
+    owner_server = {'auth_method': 'oauth_direct',
+                    'username_from_login': True, 'shared_username': ''}
+    scenarios = [('Password, then a token method again', dict())]
+
+    def _assert_properties(self, auth_method, username):
+        properties = self.properties()
+        self.assertEqual(properties['auth_method'], auth_method)
+        self.assertEqual(properties['username'], username)
+        self.assertIs(properties['username_from_login'], True)
+        self.assertIs(properties['username_from_login_inherited'], True)
+
+    def runTest(self):
+        response = self.put({'auth_method': 'password',
+                             'username': 'own-user'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self._assert_properties('password', 'own-user')
+
+        response = self.put({'auth_method': 'oauth_direct'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self._assert_properties('oauth_direct', 'own-user')
+
+        self.owner_update(username_from_login=False)
+        self.assertIs(self.properties()['username_from_login'], False)
 
 
 class NewNonOwnerUsernameTestCase(BaseTestGenerator):
