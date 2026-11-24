@@ -69,6 +69,8 @@ Use the fields in the *General* tab to identify the server:
 
 * Use the *Shared Username* field to fill the username of the shared server
   connection. By default, it will take the username of the server being shared.
+  It is disabled, and cleared, while *Username from login* is on, so that each
+  user connects with the username of their own login.
 
 * Provide a comment about the server in the *Comments* field.
 
@@ -91,6 +93,12 @@ Use the fields in the *Connection* tab to configure a connection:
   installed on that database.
 * Use the *Username* field to specify the name of a role that will be used when
   authenticating with the server.
+* In server mode, set *Username from login* to take the username from your
+  pgAdmin OAuth2 login each time you connect, instead of the *Username* field,
+  which is then disabled and cleared. It needs one of the token authentication
+  methods described below, and the dialog refuses to save it with *Password*;
+  choosing *Password* turns it off. On a shared server, every user connects as
+  the username of their own login. See :ref:`oauth2_username_from_login`.
 * When *Kerberos authentication?* is set to *True*, pgAdmin will try to connect
   the PostgreSQL server using Kerberos authentication.
 * Use the *Password* field to provide a password that will be supplied when
@@ -271,7 +279,8 @@ setting: the token is only sent to a server whose certificate and host name
 are verified. The host name itself is not restricted, so a private endpoint
 with its own DNS name works. Set the *Username* to your Microsoft Entra ID
 user name, or to the name of the Entra group or service principal that the
-database role belongs to.
+database role belongs to, or turn on *Username from login* to connect as the
+user principal name of your login.
 
 A token method cannot be combined with Kerberos authentication: the
 *Kerberos authentication?* switch is disabled while a token method is
@@ -283,7 +292,9 @@ follows it when the owner changes it, until they choose one of their own;
 their own choice then sticks. A shared server that a non-owner first opened
 before this behaviour was introduced keeps the *Password* method it was given
 then. With a token method, your login token is sent to the host the owner
-chose.
+chose. The same applies to *Username from login*: a non-owner follows the
+owner's setting until they change it, and can turn it off to enter a username
+of their own, such as an Entra group role.
 
 If Microsoft Entra ID or another identity provider needs you to sign in again
 (for example for multi-factor authentication, a Conditional Access policy or

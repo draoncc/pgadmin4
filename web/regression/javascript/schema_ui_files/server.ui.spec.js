@@ -427,6 +427,103 @@ describe('ServerSchema', ()=>{
     });
   });
 
+  describe('Username from login', ()=>{
+    const field = (schema, id) => _.find(schema.fields, (f)=>f.id==id);
+    const valid = (extra)=>({
+      gid: 1, host: 'pg.example.test', port: 5432, username: '',
+      auth_method: 'oauth_direct', username_from_login: true, ...extra,
+    });
+    let origMode;
+
+    beforeEach(()=>{
+      origMode = pgAdmin.server_mode;
+      pgAdmin.server_mode = 'True';
+    });
+
+    afterEach(()=>{
+      pgAdmin.server_mode = origMode;
+    });
+
+    it('is a switch next to Username, off by default', ()=>{
+      let schema = createSchemaObject();
+      let f = field(schema, 'username_from_login');
+      expect(f.type).toBe('switch');
+      expect(f.group).toBe('Connection');
+      expect(f.mode).toEqual(['properties', 'edit', 'create']);
+      expect(schema.defaults.username_from_login).toBe(false);
+      let ids = schema.fields.map((x)=>x.id);
+      expect(ids.indexOf('username_from_login')).toBe(ids.indexOf('username') + 1);
+    });
+
+    it('is shown in server mode only', ()=>{
+      let f = field(createSchemaObject(), 'username_from_login');
+      expect(f.visible()).toBe(true);
+      pgAdmin.server_mode = 'False';
+      expect(f.visible()).toBe(false);
+    });
+
+    it('disables the Username and Shared Username while it is on', ()=>{
+      let schema = createSchemaObject();
+      ['username', 'shared_username'].forEach((id)=>{
+        let f = field(schema, id);
+        expect(f.deps).toContain('username_from_login');
+        expect(f.disabled({username_from_login: true})).toBe(true);
+        expect(f.disabled({username_from_login: false})).toBe(false);
+      });
+    });
+
+    it('clears the Username and Shared Username when it is turned on', ()=>{
+      let schema = createSchemaObject();
+      let state = {username: 'ada', shared_username: 'ada', shared: true,
+        username_from_login: true};
+      expect(field(schema, 'username').depChange(state, ['username_from_login']))
+        .toEqual({username: ''});
+      expect(field(schema, 'shared_username').depChange(
+        state, ['username_from_login'], {}, {oldState: state}))
+        .toEqual({shared_username: ''});
+      state.username_from_login = false;
+      expect(field(schema, 'username').depChange(state, ['username_from_login']))
+        .toBeUndefined();
+    });
+
+    it('is turned off when the password method is selected', ()=>{
+      let depChange = field(createSchemaObject(), 'auth_method').depChange;
+      expect(depChange({auth_method: 'password', username_from_login: true}))
+        .toEqual({username_from_login: false});
+      expect(depChange({auth_method: 'entra', username_from_login: true,
+        connection_params: []})).toBeUndefined();
+    });
+
+    it('lets the username be empty with a token method', ()=>{
+      let setError = jest.fn();
+      expect(createSchemaObject().validate(valid(), setError)).toBe(false);
+      expect(setError).toHaveBeenCalledWith('username', null);
+      expect(setError).toHaveBeenCalledWith('username_from_login', null);
+    });
+
+    it('refuses to save with the password method', ()=>{
+      let setError = jest.fn();
+      expect(createSchemaObject().validate(
+        valid({auth_method: 'password'}), setError)).toBe(true);
+      expect(setError).toHaveBeenCalledWith('username_from_login',
+        expect.stringContaining('token authentication method'));
+    });
+
+    it('requires a username while it is off', ()=>{
+      let setError = jest.fn();
+      expect(createSchemaObject().validate(
+        valid({username_from_login: false}), setError)).toBe(true);
+      expect(setError).toHaveBeenCalledWith('username', 'Username must be specified.');
+    });
+
+    it('is ignored in desktop mode', ()=>{
+      pgAdmin.server_mode = 'False';
+      let setError = jest.fn();
+      expect(createSchemaObject().validate(valid(), setError)).toBe(true);
+      expect(setError).toHaveBeenCalledWith('username', 'Username must be specified.');
+    });
+  });
+
   describe('sharingForServerCopy', ()=>{
     it('clears the sharing of a copy made by a non-admin', ()=>{
       let d = {name: 'x', shared: true, shared_username: 'someone'};
