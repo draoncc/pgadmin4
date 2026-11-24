@@ -85,6 +85,17 @@ function usesUsernameFromLogin(state) {
     isTokenAuthMethod(state.auth_method);
 }
 
+// Whether a username field is disabled: only while the username comes from
+// the login and the field is empty. A username it still holds overrides the
+// setting, so the field stays editable for it to be emptied; it is never
+// cleared automatically.
+function isUsernameFieldDisabled(state, id) {
+  return usesUsernameFromLogin(state) && isEmptyString(state[id]);
+}
+
+const usernameOverridesHelp = ()=>gettext(
+  'A username set here overrides Username from login. Empty it to take the username from the login.');
+
 // The OAuth parameters only apply to the methods that send an OAuth token.
 const OAUTH_METHOD_PARAMS = [
   'oauth_issuer', 'oauth_client_id', 'oauth_client_secret', 'oauth_scope',
@@ -424,7 +435,8 @@ export default class ServerSchema extends BaseUISchema {
           return current_user.is_admin && pgAdmin.server_mode == 'True';
         },
         // Non-owners take their username from their own login too.
-        disabled: usesUsernameFromLogin,
+        disabled: (state)=>isUsernameFieldDisabled(state, 'shared_username'),
+        helpMessage: usernameOverridesHelp(),
         depChange: (state, source, _topState, actionObj)=>{
           let ret = {};
           if(this.origData.shared) {
@@ -489,7 +501,8 @@ export default class ServerSchema extends BaseUISchema {
         id: 'username', label: gettext('Username'), type: 'text', group: gettext('Connection'),
         mode: ['properties', 'edit', 'create'],
         deps: ['username_from_login', 'auth_method'],
-        disabled: usesUsernameFromLogin,
+        disabled: (state)=>isUsernameFieldDisabled(state, 'username'),
+        helpMessage: usernameOverridesHelp(),
         depChange: (state)=>{
           if(obj.origData.username != state.username && !obj.isNew(state) && state.connected){
             obj.informText = gettext(

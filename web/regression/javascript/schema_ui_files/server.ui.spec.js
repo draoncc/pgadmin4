@@ -462,7 +462,7 @@ describe('ServerSchema', ()=>{
       expect(f.visible()).toBe(false);
     });
 
-    it('disables the Username and Shared Username while it is on', ()=>{
+    it('disables an empty Username and Shared Username while it is on', ()=>{
       let schema = createSchemaObject();
       ['username', 'shared_username'].forEach((id)=>{
         let f = field(schema, id);
@@ -470,8 +470,20 @@ describe('ServerSchema', ()=>{
         expect(f.deps).toContain('auth_method');
         expect(f.disabled({username_from_login: true, auth_method: 'entra'}))
           .toBe(true);
+        expect(f.disabled({username_from_login: true, auth_method: 'entra',
+          [id]: ''})).toBe(true);
         expect(f.disabled({username_from_login: false, auth_method: 'entra'}))
           .toBe(false);
+      });
+    });
+
+    it('keeps a Username or Shared Username that holds a value editable, so it can be emptied', ()=>{
+      let schema = createSchemaObject();
+      ['username', 'shared_username'].forEach((id)=>{
+        let f = field(schema, id);
+        expect(f.disabled({username_from_login: true, auth_method: 'entra',
+          [id]: 'ada'})).toBe(false);
+        expect(f.helpMessage).toContain('overrides Username from login');
       });
     });
 

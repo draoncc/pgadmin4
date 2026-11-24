@@ -71,9 +71,11 @@ Use the fields in the *General* tab to identify the server:
   connection. By default, it will take the username of the server being shared.
   A non-owner who has not entered a username of their own connects as the
   current *Shared Username*, so a change to it reaches them.
-  It is disabled while *Username from login* is on with a token method. A
-  shared username it still holds wins over the setting, so empty it first for
-  each user to connect with the username of their own login.
+  A shared username set here overrides *Username from login*. While the
+  setting is on with a token method, the field stays editable as long as it
+  holds a value, so that you can empty it for each user to connect with the
+  username of their own login; once it is empty, it is disabled. It is never
+  cleared for you.
 
 * Provide a comment about the server in the *Comments* field.
 
@@ -97,9 +99,11 @@ Use the fields in the *Connection* tab to configure a connection:
 * Use the *Username* field to specify the name of a role that will be used when
   authenticating with the server.
 * In server mode, set *Username from login* to take the username from your
-  pgAdmin OAuth2 login each time you connect, instead of the *Username* field,
-  which is then disabled. A username the field still holds is kept and wins
-  over the setting, so empty it first. The setting needs one of the token
+  pgAdmin OAuth2 login each time you connect, instead of the *Username* field.
+  A username set in that field overrides the setting, and it is never cleared
+  for you: while the setting is on, the field stays editable as long as it
+  holds a value, so that you can empty it, and once it is empty it is
+  disabled. The setting needs one of the token
   authentication methods described below: choosing *Password* leaves the
   switch as it is, and the dialog refuses to save it on with *Password*. On a
   shared server, every user connects as the username of their own login. See
