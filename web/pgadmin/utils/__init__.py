@@ -37,7 +37,8 @@ from pgadmin.utils.ajax import make_json_response
 from pgadmin.model import db, User, ServerGroup, Server
 from urllib.parse import unquote
 from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD, AUTH_METHODS, \
-    check_entra_ssl, check_kerberos_exclusive, is_valid_auth_method
+    check_entra_ssl, check_kerberos_exclusive, check_username_from_login, \
+    is_valid_auth_method
 
 ADD_SERVERS_MSG = "Added %d Server Group(s) and %d Server(s)."
 
@@ -1122,6 +1123,10 @@ def dump_database_servers(output_file, selected_servers,
                       server.kerberos_conn),
             add_value(attr_dict, "AuthMethod",
                       server.auth_method or AUTH_METHOD_PASSWORD)
+            # Only written when on; its usernames are then often empty,
+            # and add_value() leaves them out.
+            if server.username_from_login:
+                attr_dict["UsernameFromLogin"] = True
             add_value(attr_dict, "ConnectionParameters",
                       server.connection_params)
             add_value(attr_dict, "Tags", server.tags)
@@ -1238,6 +1243,12 @@ def validate_json_data(data, is_admin):
 
         is_service_attrib_available = obj.get("Service", None) is not None
 
+        username_from_login = obj.get("UsernameFromLogin", None)
+        if username_from_login not in (None, True, False):
+            return gettext(
+                "UsernameFromLogin must be true or false for server '%s'" %
+                server)
+
         if not is_service_attrib_available:
             errmsg = check_attrib("Port")
             if errmsg:
@@ -1246,7 +1257,10 @@ def validate_json_data(data, is_admin):
             if errmsg:
                 return errmsg
 
-            if is_shared:
+            if username_from_login:
+                # The username is taken from each user's login.
+                pass
+            elif is_shared:
                 # Shared servers may carry either the owner's username
                 # or a per-user override, so accept either attribute.
                 # Check the values rather than merely the keys: the
@@ -1281,7 +1295,8 @@ def validate_json_data(data, is_admin):
                 "Invalid AuthMethod '%s' for server '%s'. It must be one "
                 "of: %s." % (auth_method, server, ', '.join(AUTH_METHODS)))
         errmsg = check_kerberos_exclusive(
-            auth_method, obj.get("KerberosAuthentication", None))
+            auth_method, obj.get("KerberosAuthentication", None)) or \
+            check_username_from_login(auth_method, username_from_login)
         if errmsg:
             return gettext("Server '%s': %s") % (server, errmsg)
 
@@ -1577,6 +1592,9 @@ def load_database_servers(input_file, selected_servers,
 
             new_server.auth_method = obj.get(
                 "AuthMethod", AUTH_METHOD_PASSWORD)
+
+            new_server.username_from_login = \
+                obj.get("UsernameFromLogin", None)
 
             new_server.tags = obj.get("Tags", None)
 

@@ -763,8 +763,9 @@ Taking the database username from the login
 In server mode, a server with a token authentication method can take its
 database username from each user's own pgAdmin login instead of a username
 typed in, with the *Username from login* setting of the server
-(``username_from_login`` in the servers API). Every user then connects as
-their own database role, which is what a shared server for Microsoft Entra ID needs: the
+(``username_from_login`` in the servers API, and ``UsernameFromLogin`` in a
+servers.json file, see :ref:`import_export_servers`). Every user then
+connects as their own database role, which is what a shared server for Microsoft Entra ID needs: the
 database username of an ``entra`` connection must be the user's own user
 principal name.
 
@@ -794,7 +795,7 @@ set a username for the server instead.
 A username that is set explicitly always wins over *Username from login*, so
 a server can still connect as an Entra group role or another role chosen on
 purpose. The setting cannot be used with the *Password* method, and the
-servers API refuses the combination.
+servers API and a servers.json import refuse the combination.
 
 The setting applies to the owner's own connection as well. A non-owner of a
 shared server follows the owner's setting, and while they do the owner's

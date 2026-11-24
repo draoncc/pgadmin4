@@ -134,7 +134,8 @@ attributes. The following attributes are required to be present in every server
 definition: Name, Group, Port, Username, SSLMode, MaintenanceDB and one of Host,
 HostAddr or Service. A shared server may supply SharedUsername in place of
 Username, in which case the shared username is also used as the username of the
-imported server.
+imported server. A server with ``"UsernameFromLogin": true`` needs neither
+Username nor SharedUsername.
 
 Password fields cannot be imported or exported.
 
@@ -157,6 +158,38 @@ refused. A server whose ``AuthMethod`` is ``entra`` must have
 ``"sslmode": "verify-full"`` in its ``ConnectionParameters``, or the file is
 refused. Whether the importing user may use ``entra`` is checked when they
 connect.
+
+``UsernameFromLogin`` (``true`` or ``false``) turns on *Username from login*:
+in server mode, the database username is taken from each user's own OAuth2
+login when they connect (see :ref:`oauth2_username_from_login`). It needs a
+token method, and a file that sets it to ``true`` for a server whose
+``AuthMethod`` is ``password`` or missing is refused. A Username or
+SharedUsername that the server sets as well wins over it, for example to
+connect as an Entra group role. Exports write ``UsernameFromLogin`` only when it
+is on, and leave out an empty Username or SharedUsername, so the file loads
+back in unchanged.
+
+For example, an administrator can provide one shared server through which
+every user connects to Azure Database for PostgreSQL with their own Microsoft
+Entra ID identity, with no setup of their own:
+
+.. code-block:: python
+
+    {
+        "Servers": {
+            "1": {
+                "Name": "Azure PostgreSQL",
+                "Group": "Servers",
+                "Host": "example.postgres.database.azure.com",
+                "Port": 5432,
+                "MaintenanceDB": "postgres",
+                "Shared": true,
+                "AuthMethod": "entra",
+                "UsernameFromLogin": true,
+                "ConnectionParameters": {"sslmode": "verify-full"}
+            }
+        }
+    }
 
 The following example shows both a minimally defined and a fully defined server:
 
