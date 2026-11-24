@@ -34,7 +34,7 @@ import config
 #
 ##########################################################################
 
-SCHEMA_VERSION = 54
+SCHEMA_VERSION = 55
 
 ##########################################################################
 #
@@ -609,9 +609,9 @@ class SharedServer(db.Model, UserScopedMixin):
     kerberos_conn = db.Column(
         db.Boolean(), nullable=False, default=False
     )
-    auth_method = db.Column(
-        db.String(32), nullable=False, default='password',
-        server_default='password')
+    # NULL follows the owner's server authentication method; a value is
+    # the non-owner's own choice.
+    auth_method = db.Column(db.String(32), nullable=True)
     tags = db.Column(types.JSON)
     post_connection_sql = db.Column(db.String(), nullable=True)
 

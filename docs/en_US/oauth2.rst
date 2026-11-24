@@ -485,9 +485,9 @@ In the *Connection* tab of the Server dialog, set *Authentication method* to
 
 .. note::
 
-   For shared servers, each user must explicitly choose an OAuth
-   authentication method in their own server settings.
-   The owner's selection is not inherited; the default is *Password*.
+   A non-owner of a shared server uses the owner's authentication method,
+   and follows it when the owner changes it, until they choose a method of
+   their own in their server settings. Their own choice then sticks.
 
 Both OAuth methods require ``oauth_client_id`` and
 ``oauth_issuer``. The issuer must match the PostgreSQL OAuth configuration
@@ -741,9 +741,12 @@ Security considerations
 * Tokens are not written to the logs or to error messages, and are not
   saved: no database password is stored for an ``entra`` server, and
   switching a server to the method clears the saved one.
-* Each non-owner of a shared server chooses their own authentication
-  method, which defaults to *Password*, so no user's login is used for a
-  server host they did not choose.
+* A non-owner of a shared server uses the owner's authentication method
+  until they choose their own, so their login token is sent to the host the
+  owner chose. Only an administrator can share a server, so the
+  administrator decides which hosts receive the tokens of other users'
+  logins, and an ``entra`` server only sends a token to a host whose
+  identity is verified.
 * Backup, restore, maintenance, import/export and the PSQL tool get their
   own new token for each process.
 * When the identity provider answers ``interaction_required`` or

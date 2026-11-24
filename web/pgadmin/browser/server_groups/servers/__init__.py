@@ -373,9 +373,9 @@ class ServerModule(sg.ServerGroupPluginModule):
         server.password = sharedserver.password
         server.prepare_threshold = sharedserver.prepare_threshold
         server.kerberos_conn = sharedserver.kerberos_conn
-        # Each non-owner has their own server authentication method; the
-        # owner's is never inherited.
-        server.auth_method = sharedserver.auth_method
+        # A non-owner follows the owner's server authentication method
+        # until they choose their own.
+        server.auth_method = sharedserver.auth_method or server.auth_method
         # A SharedServer row created before tags were copied across has
         # NULL tags, which is not the same thing as a user who has
         # cleared every tag they had: the latter leaves an empty list.
@@ -638,10 +638,10 @@ class ServerModule(sg.ServerGroupPluginModule):
                 passexec_name=None,
                 passexec_expiration=None,
                 kerberos_conn=False,
-                # A non-owner opts in to a token method themselves, so that
-                # their login token is not sent to a host they did not
-                # choose.
-                auth_method=AUTH_METHOD_PASSWORD,
+                # Follow the owner's server authentication method. Only an
+                # administrator can share a server, so the administrator
+                # chooses the host a token method sends the token to.
+                auth_method=None,
                 tags=data.tags,
                 post_connection_sql=None
             )
@@ -1094,12 +1094,18 @@ class ServerNode(PGChildNodeView):
             if auth_method_err:
                 return bad_auth_method_response(auth_method_err)
 
+        # The method in effect now: a non-owner who has not chosen one
+        # follows the owner's.
+        current_auth_method = server.auth_method
+        if sharedserver and sharedserver.auth_method:
+            current_auth_method = sharedserver.auth_method
+
         # Kerberos and a token method are exclusive, whichever of the two
         # this update changes.
         if 'auth_method' in data or 'kerberos_conn' in data:
             current = sharedserver or server
             auth_method_err = check_kerberos_exclusive(
-                data.get('auth_method', current.auth_method),
+                data.get('auth_method', current_auth_method),
                 data.get('kerberos_conn', current.kerberos_conn))
             if auth_method_err:
                 return bad_auth_method_response(auth_method_err)
@@ -1111,7 +1117,7 @@ class ServerNode(PGChildNodeView):
         self.update_connection_parameter(data, server, sharedserver)
 
         auth_method_err = self._check_update_auth_method_and_clear_password(
-            data, sharedserver or server)
+            data, sharedserver or server, current_auth_method)
         if auth_method_err:
             return bad_auth_method_response(auth_method_err)
 
@@ -1226,16 +1232,18 @@ class ServerNode(PGChildNodeView):
         )
 
     @staticmethod
-    def _check_update_auth_method_and_clear_password(data, current):
+    def _check_update_auth_method_and_clear_password(
+            data, current, current_auth_method):
         """Check an update against the server authentication method it
         results in, and clear the saved password when it is a token method.
+        current_auth_method is the method in effect before the update.
         Return an error message, or None.
 
         The entra method is checked when this update selects it, and its
         sslmode whenever this update changes either; an unrelated edit of
         an entra server is never refused. No database password is kept for
         a token method: the access token is the credential."""
-        auth_method = data.get('auth_method', current.auth_method)
+        auth_method = data.get('auth_method', current_auth_method)
         if not is_token_auth_method(auth_method):
             return None
 

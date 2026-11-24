@@ -278,9 +278,12 @@ A token method cannot be combined with Kerberos authentication: the
 selected, and the servers API and a servers.json import refuse the
 combination. No database password is used or saved for a token method, and
 switching a server to one clears the password it had saved.
-For a shared server, each non-owner chooses their own authentication method,
-which defaults to *Password*; the owner's choice is not inherited, so your
-login token is never sent to a host you did not choose.
+For a shared server, a non-owner uses the owner's authentication method, and
+follows it when the owner changes it, until they choose one of their own;
+their own choice then sticks. A shared server that a non-owner first opened
+before this behaviour was introduced keeps the *Password* method it was given
+then. With a token method, your login token is sent to the host the owner
+chose.
 
 If Microsoft Entra ID or another identity provider needs you to sign in again
 (for example for multi-factor authentication, a Conditional Access policy or
