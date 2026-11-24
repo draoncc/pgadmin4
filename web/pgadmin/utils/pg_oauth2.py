@@ -1167,11 +1167,11 @@ ENTRA_POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
 ENTRA_OBO_ENABLED_KEY = "OAUTH2_ENTRA_OBO_ENABLED"
 
 
-def get_login_provider_config() -> Optional[Mapping[str, Any]]:
+def get_login_oauth2_provider_config() -> Optional[Mapping[str, Any]]:
     """
-    The OAUTH2_CONFIG entry of the provider the current user logged in
-    through, or None for a login through any other auth source. It needs
-    server mode.
+    The OAUTH2_CONFIG entry of the OAuth2 provider the current user
+    logged in through, or None for a login through any other auth source.
+    It needs server mode.
     """
     if not config.SERVER_MODE or not has_request_context():
         return None
@@ -1196,7 +1196,7 @@ def get_login_id_token_claims() -> Mapping[str, Any]:
     verified at login, or an empty dict. The claims of an access token are
     never returned: they are not verified by pgAdmin.
     """
-    if get_login_provider_config() is None:
+    if get_login_oauth2_provider_config() is None:
         return {}
     token = session.get("oauth2_token")
     claims = token.get("userinfo") if isinstance(token, dict) else None
@@ -1205,11 +1205,11 @@ def get_login_id_token_claims() -> Mapping[str, Any]:
 
 def is_entra_obo_enabled() -> bool:
     """
-    Whether the current user's login provider has Entra On-Behalf-Of
-    enabled. It needs server mode and an OAuth2 login, and is false for
-    every other kind of login.
+    Whether the OAuth2 provider the current user logged in through has
+    Entra On-Behalf-Of enabled. It needs server mode and an OAuth2 login,
+    and is false for every other kind of login.
     """
-    provider = get_login_provider_config()
+    provider = get_login_oauth2_provider_config()
     return provider is not None and \
         provider.get(ENTRA_OBO_ENABLED_KEY) is True
 

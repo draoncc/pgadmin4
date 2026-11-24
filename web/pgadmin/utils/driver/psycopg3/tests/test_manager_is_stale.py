@@ -28,7 +28,7 @@ from pgadmin.utils.driver.psycopg3 import Driver
 
 def make_manager(**overrides):
     fields = dict(
-        host='old-host', port=5432, db='postgres', username='old-user',
+        host='old-host', port=5432, db='postgres', explicit_user='old-user',
         service=None, tunnel_host=None,
     )
     fields.update(overrides)
@@ -260,7 +260,7 @@ class TestManagerSourceUsesSharedServerOverlay(
         # The manager as the connect endpoint leaves it for the
         # non-owner, after manager.update() with the overlay.
         manager = make_manager(
-            username='other-user', service=None,
+            explicit_user='other-user', service=None,
             tunnel_host='other-bastion',
             pga_user='other-uniquifier')
 

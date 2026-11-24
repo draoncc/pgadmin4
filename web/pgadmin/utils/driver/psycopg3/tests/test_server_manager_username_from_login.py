@@ -235,7 +235,7 @@ class ServerManagerUserWhenLoginUnreadableTest(BaseTestGenerator):
     """The username is read wherever the server is shown, so a login that
     cannot be looked at gives no username rather than an error."""
 
-    scenarios = [('Login provider configuration fails', dict())]
+    scenarios = [('OAuth2 provider configuration fails', dict())]
 
     def setUp(self):
         unittest.TestCase.setUp(self)

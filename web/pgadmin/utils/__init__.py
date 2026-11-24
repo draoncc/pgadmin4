@@ -1246,8 +1246,8 @@ def validate_json_data(data, is_admin):
         username_from_login = obj.get("UsernameFromLogin", None)
         if username_from_login not in (None, True, False):
             return gettext(
-                "UsernameFromLogin must be true or false for server '%s'" %
-                server)
+                "UsernameFromLogin must be true or false for server "
+                "'%s'") % server
 
         if not is_service_attrib_available:
             errmsg = check_attrib("Port")

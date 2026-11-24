@@ -778,7 +778,7 @@ claims of the access token sent to the database are never used.
   ``preferred_username`` for a login that has no ``upn``, such as a guest
   user's.
 * For the *OAuth: pgAdmin login token* and *OAuth: token exchange* methods,
-  set ``OAUTH2_DB_USERNAME_CLAIM`` in the login provider's ``OAUTH2_CONFIG``
+  set ``OAUTH2_DB_USERNAME_CLAIM`` in the OAuth2 provider's ``OAUTH2_CONFIG``
   entry to choose the claim, so that the name matches the role mapping of the
   PostgreSQL token validator. Without it, the first of ``upn``,
   ``preferred_username`` and ``email`` is used. pgAdmin logs a warning when it

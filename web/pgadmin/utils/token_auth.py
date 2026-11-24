@@ -33,8 +33,7 @@ from pgadmin.utils import pg_oauth2
 from pgadmin.utils.ajax import make_json_response
 from pgadmin.utils.auth_method import AUTH_METHOD_ENTRA, \
     AUTH_METHOD_OAUTH_DIRECT, AUTH_METHOD_OAUTH_EXCHANGE, \
-    AUTH_METHOD_PASSWORD, check_entra_available, check_entra_ssl, \
-    is_token_auth_method
+    AUTH_METHOD_PASSWORD, check_entra_available, check_entra_ssl
 
 # check is optional: a callable taking the server's connection parameters
 # that returns an error message when the server must not be sent a token.
@@ -250,7 +249,7 @@ class LoginUsernameError(pg_oauth2.OAuthTokenError):
 def _db_username_claims(auth_method):
     if auth_method == AUTH_METHOD_ENTRA:
         return ENTRA_DB_USERNAME_CLAIMS
-    claim = (pg_oauth2.get_login_provider_config() or {}).get(
+    claim = (pg_oauth2.get_login_oauth2_provider_config() or {}).get(
         DB_USERNAME_CLAIM_KEY)
     if isinstance(claim, str) and claim.strip():
         return (claim.strip(),)
@@ -282,16 +281,3 @@ def login_db_username(auth_method):
         'login has none of the claims {0}. Set a username for the server, '
         'or ask your administrator to check the OAuth2 provider '
         'configuration.').format(', '.join(names)))
-
-
-def connection_username(username, username_from_login, auth_method):
-    """The database username a connection is opened with.
-
-    A username set explicitly wins. Otherwise, with "Username from login"
-    on and a token method, it is login_db_username(), which can raise
-    OAuthTokenError. It is never saved.
-    """
-    if username or not username_from_login or \
-            not is_token_auth_method(auth_method):
-        return username
-    return login_db_username(auth_method)

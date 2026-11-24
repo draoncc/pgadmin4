@@ -25,10 +25,10 @@ from pgadmin.utils import get_complete_file_path, \
     check_connection_params_allowed
 from pgadmin.utils.crypto import decrypt
 from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD, \
-    is_token_auth_method
+    uses_username_from_login
 from pgadmin.utils.pg_oauth2 import OAuthTokenError
-from pgadmin.utils.token_auth import connection_username, \
-    get_token_auth_method, utility_password
+from pgadmin.utils.token_auth import get_token_auth_method, \
+    login_db_username, utility_password
 from pgadmin.utils.master_password import process_masterpass_disabled
 from pgadmin.utils.locker import KerberosNotAllowed, \
     apply_kerberos_conn_params, check_kerberos_conn_params_unchanged
@@ -57,9 +57,9 @@ class ServerManager(object):
     """
     # How the server is authenticated; ServerManager.update() sets it.
     auth_method = AUTH_METHOD_PASSWORD
-    # The username set explicitly on the server, and whether the database
-    # username is otherwise taken from the pgAdmin login; see user.
-    username = None
+    # The database username set explicitly on the server, and whether
+    # "Username from login" is in effect; user is the resolved username.
+    explicit_user = None
     username_from_login = False
     _INFORMATION_MSG = gettext("Information is not available.")
 
@@ -93,7 +93,7 @@ class ServerManager(object):
         self.db = server.maintenance_db
         self.shared = server.shared
         self.did = None
-        self.username = server.username
+        self.explicit_user = server.username
         self.password = server.password
         self.role = server.role
         self.pinged = datetime.datetime.now()
@@ -131,9 +131,8 @@ class ServerManager(object):
 
         self.kerberos_conn = server.kerberos_conn
         self.auth_method = server.auth_method or AUTH_METHOD_PASSWORD
-        self.username_from_login = \
-            bool(getattr(server, 'username_from_login', False)) and \
-            is_token_auth_method(self.auth_method)
+        self.username_from_login = uses_username_from_login(
+            self.auth_method, getattr(server, 'username_from_login', False))
         self.gss_authenticated = False
         self.gss_encrypted = False
         self.connection_params = server.connection_params
@@ -157,33 +156,32 @@ class ServerManager(object):
 
     @property
     def user(self):
-        """The database username: the one set explicitly, or else, with
-        "Username from login", the one taken from the pgAdmin login (see
-        connection_user()), or None when the login has none. Every
+        """The resolved database username: the one set explicitly, or
+        else, with "Username from login", the one taken from the pgAdmin
+        login (see resolved_user()), or None when it cannot be. Every
         connection, the query tool and background utilities use it. It is
         worked out on every use and never saved."""
         try:
-            return self.connection_user()
+            return self.resolved_user()
         except OAuthTokenError:
             return None
-        except Exception as e:
-            # It is read wherever the server is shown, which must not fail
-            # because the login cannot be looked at; connecting reports it.
+        except ValueError as e:
+            # The OAuth2 provider configuration is refused. The username is
+            # read wherever the server is shown, which must not fail
+            # because of it; connecting reports it.
             current_app.logger.warning(
                 'Cannot take the database username of server %s from the '
                 'login: %s', self.sid, e)
             return None
 
-    @user.setter
-    def user(self, value):
-        self.username = value
-
-    def connection_user(self):
-        """The database username to open a connection with. Raises
-        OAuthTokenError when it is taken from the pgAdmin login and cannot
-        be."""
-        return connection_username(
-            self.username, self.username_from_login, self.auth_method)
+    def resolved_user(self):
+        """The resolved database username to open a connection with. A
+        username set explicitly wins; otherwise, with "Username from
+        login", it is taken from the pgAdmin login. Raises OAuthTokenError
+        when it cannot be."""
+        if self.explicit_user or not self.username_from_login:
+            return self.explicit_user
+        return login_db_username(self.auth_method)
 
     def _set_password(self, res):
         """
@@ -219,7 +217,7 @@ class ServerManager(object):
         res['host'] = self.host
         res['port'] = self.port
         res['db'] = self.db
-        res['user'] = self.username
+        res['user'] = self.explicit_user
         res['service'] = self.service
         res['tunnel_host'] = self.tunnel_host
         res['pga_user'] = self.pga_user

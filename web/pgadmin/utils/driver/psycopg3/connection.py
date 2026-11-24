@@ -510,7 +510,7 @@ class Connection(BaseConnection):
         """
         manager = self.manager
         if not user:
-            user = manager.connection_user()
+            user = manager.resolved_user()
         with ConnectionLocker(manager.kerberos_conn):
             with token_connection(
                     manager.auth_method, manager.connection_params,

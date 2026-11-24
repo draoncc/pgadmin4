@@ -108,6 +108,12 @@ def check_auth_method(auth_method):
     ).format(auth_method, ', '.join(AUTH_METHODS))
 
 
+def uses_username_from_login(auth_method, username_from_login):
+    """Whether "Username from login" takes effect: the setting is on and
+    the method is a token method. With any other method it is ignored."""
+    return bool(username_from_login) and is_token_auth_method(auth_method)
+
+
 def check_username_from_login(auth_method, username_from_login):
     """Return an error message when "Username from login" is stored
     together with a method that has no login token to take the username

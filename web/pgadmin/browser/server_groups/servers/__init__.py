@@ -36,7 +36,7 @@ from pgadmin.utils.master_password import get_crypt_key
 from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD, \
     check_auth_method, check_entra_available, check_entra_ssl, \
     check_kerberos_exclusive, check_username_from_login, \
-    is_token_auth_method
+    is_token_auth_method, uses_username_from_login
 from pgadmin.utils.exception import CryptKeyMissing, ConnectionLost
 from pgadmin.utils.token_auth import sign_in_again_response
 from pgadmin.tools.schema_diff.node_registry import SchemaDiffRegistry
@@ -78,6 +78,15 @@ def _is_non_owner(server):
     """True if the server is shared and the current user is not
     the owner.  Centralises the check used in 15+ places."""
     return server.shared and server.user_id != current_user.id
+
+
+def followed_auth_method(server, sharedserver=None):
+    """The server authentication method in effect for the current user:
+    a non-owner (with a sharedserver row) follows the owner's method until
+    they choose their own, which then sticks."""
+    if sharedserver is not None and sharedserver.auth_method:
+        return sharedserver.auth_method
+    return server.auth_method
 
 
 def prepare_sharing_data(data, server=None):
@@ -373,9 +382,7 @@ class ServerModule(sg.ServerGroupPluginModule):
         server.password = sharedserver.password
         server.prepare_threshold = sharedserver.prepare_threshold
         server.kerberos_conn = sharedserver.kerberos_conn
-        # A non-owner follows the owner's server authentication method
-        # until they choose their own.
-        server.auth_method = sharedserver.auth_method or server.auth_method
+        server.auth_method = followed_auth_method(server, sharedserver)
         # Likewise for "Username from login". While the non-owner follows
         # it, the owner's shared username is the username set explicitly,
         # and it wins. The setting only applies to a token method, so it is
@@ -387,8 +394,8 @@ class ServerModule(sg.ServerGroupPluginModule):
         else:
             username_from_login = sharedserver.username_from_login
             server.username = sharedserver.username
-        server.username_from_login = username_from_login and \
-            is_token_auth_method(server.auth_method)
+        server.username_from_login = uses_username_from_login(
+            server.auth_method, username_from_login)
         # A SharedServer row created before tags were copied across has
         # NULL tags, which is not the same thing as a user who has
         # cleared every tag they had: the latter leaves an empty list.
@@ -1113,11 +1120,7 @@ class ServerNode(PGChildNodeView):
             if auth_method_err:
                 return bad_auth_method_response(auth_method_err)
 
-        # The method in effect now: a non-owner who has not chosen one
-        # follows the owner's.
-        current_auth_method = server.auth_method
-        if sharedserver and sharedserver.auth_method:
-            current_auth_method = sharedserver.auth_method
+        current_auth_method = followed_auth_method(server, sharedserver)
 
         # Kerberos and a token method are exclusive, whichever of the two
         # this update changes.
