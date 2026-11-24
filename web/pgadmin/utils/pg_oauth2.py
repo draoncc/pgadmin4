@@ -1167,29 +1167,51 @@ ENTRA_POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
 ENTRA_OBO_ENABLED_KEY = "OAUTH2_ENTRA_OBO_ENABLED"
 
 
-def is_entra_obo_enabled() -> bool:
+def get_login_provider_config() -> Optional[Mapping[str, Any]]:
     """
-    Whether the current user's login provider has Entra On-Behalf-Of
-    enabled. It needs server mode and an OAuth2 login, and is false for
-    every other kind of login.
+    The OAUTH2_CONFIG entry of the provider the current user logged in
+    through, or None for a login through any other auth source. It needs
+    server mode.
     """
     if not config.SERVER_MODE or not has_request_context():
-        return False
+        return None
 
     provider_name = session.get("oauth2_provider")
     if not isinstance(provider_name, str) or not provider_name:
-        return False
+        return None
 
     # Import lazily to avoid an import cycle during pgAdmin startup.
     from pgadmin.authenticate import get_auth_sources
     from pgadmin.utils.constants import OAUTH2
 
     oauth_source = get_auth_sources(OAUTH2)
-    provider = (
+    return (
         getattr(oauth_source, "oauth2_config", None) or {}
     ).get(provider_name) or {}
 
-    return provider.get(ENTRA_OBO_ENABLED_KEY) is True
+
+def get_login_id_token_claims() -> Mapping[str, Any]:
+    """
+    The claims of the current user's OAuth2 login ID token, which Authlib
+    verified at login, or an empty dict. The claims of an access token are
+    never returned: they are not verified by pgAdmin.
+    """
+    if get_login_provider_config() is None:
+        return {}
+    token = session.get("oauth2_token")
+    claims = token.get("userinfo") if isinstance(token, dict) else None
+    return claims if isinstance(claims, dict) else {}
+
+
+def is_entra_obo_enabled() -> bool:
+    """
+    Whether the current user's login provider has Entra On-Behalf-Of
+    enabled. It needs server mode and an OAuth2 login, and is false for
+    every other kind of login.
+    """
+    provider = get_login_provider_config()
+    return provider is not None and \
+        provider.get(ENTRA_OBO_ENABLED_KEY) is True
 
 
 def get_entra_obo_token() -> str:

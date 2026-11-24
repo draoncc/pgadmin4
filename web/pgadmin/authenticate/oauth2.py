@@ -142,6 +142,27 @@ def warn_on_misplaced_oauth2_config(app):
     )
 
 
+def warn_on_ignored_db_username_claim(app):
+    """
+    Log a warning for each OAuth2 provider that has Entra On-Behalf-Of
+    enabled and also sets OAUTH2_DB_USERNAME_CLAIM. "Username from login"
+    takes the database username of an entra server from the upn and
+    preferred_username claims, whatever that setting says.
+    """
+    for provider in (getattr(config, 'OAUTH2_CONFIG', None) or []):
+        if not isinstance(provider, dict) or \
+                provider.get('OAUTH2_ENTRA_OBO_ENABLED') is not True or \
+                not provider.get('OAUTH2_DB_USERNAME_CLAIM'):
+            continue
+        app.logger.warning(
+            "OAuth2: provider %s has OAUTH2_ENTRA_OBO_ENABLED set, so "
+            "OAUTH2_DB_USERNAME_CLAIM has no effect on servers that use the "
+            "entra authentication method: their database username is "
+            "taken from the upn claim, or the preferred_username claim when "
+            "there is no upn.",
+            provider.get('OAUTH2_NAME'))
+
+
 class Oauth2Module(PgAdminModule):
     def register(self, app, options):
         # Do not look for the sub_modules,
@@ -292,6 +313,7 @@ def init_app(app):
     app.login_manager.logout_view = OAUTH2_LOGOUT
 
     warn_on_misplaced_oauth2_config(app)
+    warn_on_ignored_db_username_claim(app)
 
 
 class OAuth2Authentication(BaseAuthentication):

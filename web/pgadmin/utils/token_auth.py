@@ -27,11 +27,14 @@ provider registered with an existing delivery.
 from collections import namedtuple
 from contextlib import contextmanager
 
+from flask_babel import gettext
+
 from pgadmin.utils import pg_oauth2
 from pgadmin.utils.ajax import make_json_response
 from pgadmin.utils.auth_method import AUTH_METHOD_ENTRA, \
     AUTH_METHOD_OAUTH_DIRECT, AUTH_METHOD_OAUTH_EXCHANGE, \
-    AUTH_METHOD_PASSWORD, check_entra_ssl
+    AUTH_METHOD_PASSWORD, check_entra_available, check_entra_ssl, \
+    is_token_auth_method
 
 # check is optional: a callable taking the server's connection parameters
 # that returns an error message when the server must not be sent a token.
@@ -228,3 +231,67 @@ def sign_in_again_response(server, errmsg):
             'errmsg': errmsg,
             'sign_in_again': True,
         })
+
+
+# The OAUTH2_CONFIG key that chooses the login claim "Username from login"
+# takes the database username from, for the methods other than entra.
+DB_USERNAME_CLAIM_KEY = 'OAUTH2_DB_USERNAME_CLAIM'
+# Azure Database for PostgreSQL expects the user principal name; a guest's
+# login has none, and its preferred_username is the name instead.
+ENTRA_DB_USERNAME_CLAIMS = ('upn', 'preferred_username')
+DEFAULT_DB_USERNAME_CLAIMS = ('upn', 'preferred_username', 'email')
+
+
+class LoginUsernameError(pg_oauth2.OAuthTokenError):
+    """The pgAdmin login has no claim to take the database username
+    from."""
+
+
+def _db_username_claims(auth_method):
+    if auth_method == AUTH_METHOD_ENTRA:
+        return ENTRA_DB_USERNAME_CLAIMS
+    claim = (pg_oauth2.get_login_provider_config() or {}).get(
+        DB_USERNAME_CLAIM_KEY)
+    if isinstance(claim, str) and claim.strip():
+        return (claim.strip(),)
+    return DEFAULT_DB_USERNAME_CLAIMS
+
+
+def login_db_username(auth_method):
+    """The database username "Username from login" takes from the
+    verified ID token claims of the current user's OAuth2 login.
+
+    For entra the claims are upn, then preferred_username. For the other
+    token methods it is the claim OAUTH2_DB_USERNAME_CLAIM names, or upn,
+    preferred_username, then email. Raises OAuthTokenError when entra is
+    not available to the user, and LoginUsernameError when the login has
+    none of the claims.
+    """
+    error = check_entra_available(auth_method)
+    if error:
+        raise pg_oauth2.OAuthTokenError(error)
+
+    names = _db_username_claims(auth_method)
+    claims = pg_oauth2.get_login_id_token_claims()
+    for name in names:
+        value = claims.get(name)
+        if isinstance(value, str) and value.strip():
+            return value
+    raise LoginUsernameError(gettext(
+        'The database username is taken from your pgAdmin login, but your '
+        'login has none of the claims {0}. Set a username for the server, '
+        'or ask your administrator to check the OAuth2 provider '
+        'configuration.').format(', '.join(names)))
+
+
+def connection_username(username, username_from_login, auth_method):
+    """The database username a connection is opened with.
+
+    A username set explicitly wins. Otherwise, with "Username from login"
+    on and a token method, it is login_db_username(), which can raise
+    OAuthTokenError. It is never saved.
+    """
+    if username or not username_from_login or \
+            not is_token_auth_method(auth_method):
+        return username
+    return login_db_username(auth_method)

@@ -236,7 +236,7 @@ class Driver(BaseDriver):
             manager.host != server_data.host or
             manager.port != server_data.port or
             manager.db != server_data.maintenance_db or
-            manager.user != server_data.username or
+            manager.username != server_data.username or
             manager.service != server_data.service or
             manager.tunnel_host != Driver._effective_tunnel_host(server_data)
         )

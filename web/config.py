@@ -976,7 +976,13 @@ OAUTH2_CONFIG = [
         # then gets a database token On-Behalf-Of the user's login. It needs
         # the pgAdmin app registration to expose its own API scope, which
         # OAUTH2_SCOPE must include, and a client secret. Server mode only.
-        'OAUTH2_ENTRA_OBO_ENABLED': False
+        'OAUTH2_ENTRA_OBO_ENABLED': False,
+        # The claim of the login ID token that "Username from login" takes
+        # the database username from, on servers with the 'oauth_direct'
+        # or 'oauth_exchange' authentication method. When it is None, the
+        # first of upn, preferred_username and email is used. Servers with
+        # the 'entra' method always use upn, then preferred_username.
+        'OAUTH2_DB_USERNAME_CLAIM': None
     }
 ]
 

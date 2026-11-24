@@ -102,6 +102,7 @@ and secure.
     "OAUTH2_LOGOUT_URL", "The provider's logout endpoint, used to end the user's session with the provider
     when they log out of pgAdmin. *{redirect_uri}* and *{id_token}* in the value are replaced with the pgAdmin
     URL and the user's ID token. Ex: *https://example.com/realms/master/protocol/openid-connect/logout?post_logout_redirect_uri={redirect_uri}&id_token_hint={id_token}* (for Keycloak)"
+    "OAUTH2_DB_USERNAME_CLAIM", "The claim of the login ID token that *Username from login* takes the database username from, on servers with the *OAuth: pgAdmin login token* or *OAuth: token exchange* authentication method. If the value is empty, pgAdmin uses the first of *upn*, *preferred_username* and *email*. It has no effect on servers with the *Microsoft Entra ID* method. See :ref:`oauth2_username_from_login` below."
 
 Accounts
 ========
@@ -753,3 +754,53 @@ Security considerations
   ``invalid_grant``, or the login has expired, the connect dialog offers
   *Sign in again*, which renews the pgAdmin login through the same provider
   and retries the connection.
+
+.. _oauth2_username_from_login:
+
+Taking the database username from the login
+-------------------------------------------
+
+In server mode, a server with a token authentication method can take its
+database username from each user's own pgAdmin login instead of a username
+typed in, with the *Username from login* setting of the server
+(``username_from_login`` in the servers API). Every user then connects as
+their own database role, which is what a shared server for Microsoft Entra ID needs: the
+database username of an ``entra`` connection must be the user's own user
+principal name.
+
+When pgAdmin connects, it takes the username from a claim of the ID token of
+the user's OAuth2 login, which was verified when the user logged in. The
+claims of the access token sent to the database are never used.
+
+* For the *Microsoft Entra ID* method the claim is ``upn``, or
+  ``preferred_username`` for a login that has no ``upn``, such as a guest
+  user's.
+* For the *OAuth: pgAdmin login token* and *OAuth: token exchange* methods,
+  set ``OAUTH2_DB_USERNAME_CLAIM`` in the login provider's ``OAUTH2_CONFIG``
+  entry to choose the claim, so that the name matches the role mapping of the
+  PostgreSQL token validator. Without it, the first of ``upn``,
+  ``preferred_username`` and ``email`` is used. pgAdmin logs a warning when it
+  starts for a provider that has ``OAUTH2_ENTRA_OBO_ENABLED`` set and also sets
+  ``OAUTH2_DB_USERNAME_CLAIM``, which has no effect on its ``entra`` servers.
+
+The claim value is used as it is. The username is worked out for each
+connection, including those of the Query Tool, of background utilities such as
+backup and the PSQL tool, and of *Sign in again*, and it is never saved, so a
+change at the identity provider is picked up at the next connection. If the
+login has none of the claims, for example because the user logged in another
+way, connecting fails with an error that names the claims pgAdmin looked for;
+set a username for the server instead.
+
+A username that is set explicitly always wins over *Username from login*, so
+a server can still connect as an Entra group role or another role chosen on
+purpose. The setting cannot be used with the *Password* method, and the
+servers API refuses the combination.
+
+The setting applies to the owner's own connection as well. A non-owner of a
+shared server follows the owner's setting, and while they do the owner's
+*Shared Username*, if there is one, is their username set explicitly. A
+non-owner can turn the setting off and enter a username of their own, for
+example to connect as a group role, or turn it on for a token method they
+chose themselves; their own choice then sticks when the owner changes the
+setting. A non-owner who chooses the *Password* method while following the
+owner's setting must enter a username, as the setting is then ignored.

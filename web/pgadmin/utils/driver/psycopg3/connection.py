@@ -503,9 +503,14 @@ class Connection(BaseConnection):
         token delivery of the method, builds the connection string for
         database and user with the password to use, and returns
         open_(connection_string) while the credentials are in scope.
-        Raises OAuthTokenError when the token cannot be obtained.
+        Without a user, it is the server manager's, which "Username from
+        login" can take from the pgAdmin login.
+        Raises OAuthTokenError when the token or the username cannot be
+        obtained; no token is requested without a username.
         """
         manager = self.manager
+        if not user:
+            user = manager.connection_user()
         with ConnectionLocker(manager.kerberos_conn):
             with token_connection(
                     manager.auth_method, manager.connection_params,

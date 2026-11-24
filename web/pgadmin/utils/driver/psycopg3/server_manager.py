@@ -24,9 +24,11 @@ from pgadmin.utils import get_complete_file_path, \
     client_files_isolated, isolate_client_credential_files, \
     check_connection_params_allowed
 from pgadmin.utils.crypto import decrypt
-from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD
-from pgadmin.utils.token_auth import get_token_auth_method, \
-    utility_password
+from pgadmin.utils.auth_method import AUTH_METHOD_PASSWORD, \
+    is_token_auth_method
+from pgadmin.utils.pg_oauth2 import OAuthTokenError
+from pgadmin.utils.token_auth import connection_username, \
+    get_token_auth_method, utility_password
 from pgadmin.utils.master_password import process_masterpass_disabled
 from pgadmin.utils.locker import KerberosNotAllowed, \
     apply_kerberos_conn_params, check_kerberos_conn_params_unchanged
@@ -55,6 +57,10 @@ class ServerManager(object):
     """
     # How the server is authenticated; ServerManager.update() sets it.
     auth_method = AUTH_METHOD_PASSWORD
+    # The username set explicitly on the server, and whether the database
+    # username is otherwise taken from the pgAdmin login; see user.
+    username = None
+    username_from_login = False
     _INFORMATION_MSG = gettext("Information is not available.")
 
     def __init__(self, server):
@@ -87,7 +93,7 @@ class ServerManager(object):
         self.db = server.maintenance_db
         self.shared = server.shared
         self.did = None
-        self.user = server.username
+        self.username = server.username
         self.password = server.password
         self.role = server.role
         self.pinged = datetime.datetime.now()
@@ -125,6 +131,9 @@ class ServerManager(object):
 
         self.kerberos_conn = server.kerberos_conn
         self.auth_method = server.auth_method or AUTH_METHOD_PASSWORD
+        self.username_from_login = \
+            bool(getattr(server, 'username_from_login', False)) and \
+            is_token_auth_method(self.auth_method)
         self.gss_authenticated = False
         self.gss_encrypted = False
         self.connection_params = server.connection_params
@@ -145,6 +154,29 @@ class ServerManager(object):
         self.update_session()
 
         self.connections = dict()
+
+    @property
+    def user(self):
+        """The database username: the one set explicitly, or else, with
+        "Username from login", the one taken from the pgAdmin login (see
+        connection_user()), or None when the login has none. Every
+        connection, the query tool and background utilities use it. It is
+        worked out on every use and never saved."""
+        try:
+            return self.connection_user()
+        except OAuthTokenError:
+            return None
+
+    @user.setter
+    def user(self, value):
+        self.username = value
+
+    def connection_user(self):
+        """The database username to open a connection with. Raises
+        OAuthTokenError when it is taken from the pgAdmin login and cannot
+        be."""
+        return connection_username(
+            self.username, self.username_from_login, self.auth_method)
 
     def _set_password(self, res):
         """
@@ -180,7 +212,7 @@ class ServerManager(object):
         res['host'] = self.host
         res['port'] = self.port
         res['db'] = self.db
-        res['user'] = self.user
+        res['user'] = self.username
         res['service'] = self.service
         res['tunnel_host'] = self.tunnel_host
         res['pga_user'] = self.pga_user
