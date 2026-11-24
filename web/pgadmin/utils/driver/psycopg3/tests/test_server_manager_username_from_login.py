@@ -229,3 +229,32 @@ class ServerManagerUsernameFromLoginTest(BaseTestGenerator):
         # A username from the login does not make the manager look like
         # it belongs to another server, which would drop its connections.
         self.assertFalse(stale)
+
+
+class ServerManagerUserWhenLoginUnreadableTest(BaseTestGenerator):
+    """The username is read wherever the server is shown, so a login that
+    cannot be looked at gives no username rather than an error."""
+
+    scenarios = [('Login provider configuration fails', dict())]
+
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+        self.app = Flask(__name__)
+        self.app.config.update(SECRET_KEY='unit-test', TESTING=True,
+                               SERVER_MODE=True)
+        Babel(self.app)
+
+    def runTest(self):
+        server = Server(
+            id=7, user_id=1, servergroup_id=1, name='login-username',
+            host='database.example.test', port=5432,
+            maintenance_db='postgres', username=None, shared=False,
+            kerberos_conn=False, auth_method='oauth_direct',
+            username_from_login=True, connection_params={})
+        with self.app.test_request_context('/'), \
+                patch.object(config, 'SERVER_MODE', True), \
+                patch('pgadmin.authenticate.get_auth_sources',
+                      side_effect=ValueError('bad provider')):
+            session['oauth2_provider'] = PROVIDER
+            manager = ServerManager(server)
+            self.assertIsNone(manager.user)

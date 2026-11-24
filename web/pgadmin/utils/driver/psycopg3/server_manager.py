@@ -166,6 +166,13 @@ class ServerManager(object):
             return self.connection_user()
         except OAuthTokenError:
             return None
+        except Exception as e:
+            # It is read wherever the server is shown, which must not fail
+            # because the login cannot be looked at; connecting reports it.
+            current_app.logger.warning(
+                'Cannot take the database username of server %s from the '
+                'login: %s', self.sid, e)
+            return None
 
     @user.setter
     def user(self, value):
